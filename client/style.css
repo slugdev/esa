@@ -156,7 +156,7 @@ input[type="file"] { padding: 8px; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .panel-head h2 { margin: 0; }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .apps-layout { display: grid; grid-template-columns: minmax(280px, 0.75fr) minmax(360px, 1fr); gap: 18px; align-items: start; }
 #app-workspace { border: 1px solid rgba(90, 179, 255, 0.25); border-radius: var(--radius); padding: 16px; background: rgba(9, 18, 34, 0.8); box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.25); }
 .workspace-head { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
@@ -176,6 +176,20 @@ input[type="file"] { padding: 8px; }
   padding: 12px;
   background: #0e1729;
 }
+.app-card-clickable {
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  border: 1px solid rgba(90, 179, 255, 0.25);
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+.app-card-clickable:hover,
+.app-card-clickable:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--accent);
+  box-shadow: 0 10px 30px rgba(16, 44, 84, 0.5);
+}
+.app-card-clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .app-card-top { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
 .app-icon {
   width: 60px;

@@ -98,10 +98,12 @@
   });
 
   if (token && backToLogin) backToLogin.remove();
-  backToLogin?.addEventListener('click', () => {
-    clearSession();
-    window.location.href = 'login.html';
-  });
+  if (backToLogin) {
+    backToLogin.addEventListener('click', () => {
+      clearSession();
+      window.location.href = 'login.html';
+    });
+  }
 
   async function detectRole() {
     role = { admin: false, developer: false };
@@ -213,13 +215,10 @@
       return;
     }
     list.innerHTML = apps.map(a => {
-      const icon = renderAppIcon(a);
-      const canAuthor = (developerOverride || role.developer || role.admin) && (role.admin || a.owner === currentUser);
-      const launchLabel = a.has_ui ? 'Launch' : 'Launch (No UI)';
-      const launchBtn = `<button type="button" data-launch-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">${launchLabel}</button>`;
-      const designBtn = canAuthor ? `<button type="button" class="ghost" data-design-app="${escapeHtml(a.name)}" data-design-owner="${escapeHtml(a.owner)}">Design UI</button>` : '';
-      const statusMeta = a.has_ui ? 'UI ready' : 'UI not authored yet';
-      return `<div class="app-card"><div class="app-card-top">${icon}<div><h4>${escapeHtml(a.name)}</h4><div class="app-meta">Owner: ${escapeHtml(a.owner)} • Version ${a.latest_version}</div></div></div><div class="app-meta">${a.public ? 'Public' : 'Restricted'} • ${statusMeta}</div><p>${escapeHtml(a.description || '')}</p><div class="app-buttons">${launchBtn}${designBtn}</div></div>`;
+          const icon = renderAppIcon(a);
+          const statusMeta = a.has_ui ? 'UI ready' : 'UI not authored yet';
+          const description = formatDescription(a.description);
+          return `<button type="button" class="app-card app-card-clickable" data-launch-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}"><div class="app-card-top">${icon}<div><h4>${escapeHtml(a.name)}</h4><div class="app-meta">Owner: ${escapeHtml(a.owner)} • Version ${a.latest_version}</div></div></div><div class="app-meta">${a.public ? 'Public' : 'Restricted'} • ${statusMeta}</div><p>${escapeHtml(description)}</p></button>`;
     }).join('');
   }
 
@@ -229,13 +228,6 @@
       const owner = launchBtn.dataset.owner;
       const name = launchBtn.dataset.launchApp;
       launchApp(owner, name);
-      return;
-    }
-    const designBtn = e.target.closest('[data-design-app]');
-    if (designBtn) {
-      const owner = designBtn.dataset.designOwner || currentUser;
-      const name = designBtn.dataset.designApp;
-      openBuilder(owner, name);
     }
   }
 
@@ -663,6 +655,12 @@
   }
 
   const escapeHtml = (s) => (s || '').replace(/[&<>"]+/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const formatDescription = (desc) => {
+    const normalized = (desc || '').trim();
+    if (!normalized) return 'No description yet.';
+    if (normalized.length <= 120) return normalized;
+    return `${normalized.slice(0, 117).trimEnd()}...`;
+  };
 
   const fileToBase64 = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -777,12 +775,14 @@
   function openDevModal() {
     if (!devModal) return;
     devModal.classList.remove('hidden');
+    devModal.setAttribute('aria-hidden', 'false');
     bodyEl.classList.add('modal-open');
   }
 
   function closeDevModal(resetForm = false) {
     if (!devModal) return;
     devModal.classList.add('hidden');
+    devModal.setAttribute('aria-hidden', 'true');
     bodyEl.classList.remove('modal-open');
     if (resetForm) setCreateMode('create');
   }
@@ -790,12 +790,14 @@
   function openBuilderModal() {
     if (!builderModal) return;
     builderModal.classList.remove('hidden');
+    builderModal.setAttribute('aria-hidden', 'false');
     bodyEl.classList.add('modal-open');
   }
 
   function closeBuilderModal() {
     if (!builderModal) return;
     builderModal.classList.add('hidden');
+    builderModal.setAttribute('aria-hidden', 'true');
     bodyEl.classList.remove('modal-open');
     builderTarget = null;
     builderComponents = [];
