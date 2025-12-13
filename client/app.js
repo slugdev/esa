@@ -1,20 +1,27 @@
 (() => {
-  const apiBase = 'http://localhost:8080'; // hardcoded ESA API base
-  let token = sessionStorage.getItem('esa_token');
-  let currentUser = sessionStorage.getItem('esa_user');
-  let role = { admin: false, developer: false };
-  let developerOverride = false;
-  let appsCache = [];
-  let formMode = 'create';
-  let editingApp = null;
-  let activeApp = null;
-  let activeComponents = [];
-  let workbookApp = null;
-  let builderTarget = null;
-  let builderComponents = [];
-
-  const qs = (sel) => document.querySelector(sel);
-  const qsa = (sel) => Array.from(document.querySelectorAll(sel));
+        if (file) {
+          const payload = { name, description, public: isPublic };
+          if (access_group) payload.access_group = access_group;
+          payload.file_base64 = await fileToBase64(file);
+          if (image_base64) payload.image_base64 = image_base64;
+          const res = await fetch(`${apiBase}/apps/version`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error('Version publish failed');
+        } else {
+          const payload = { description, public: isPublic };
+          if (access_group) payload.access_group = access_group;
+          if (image_base64) payload.image_base64 = image_base64;
+          const res = await fetch(`${apiBase}/apps/${encodeURIComponent(editingApp.name)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error('Update failed');
+        }
+        showToast(file ? 'New version published' : 'Application updated');
   const toastEl = qs('#toast');
 
   const showToast = (msg, isError = false) => {

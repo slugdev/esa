@@ -891,6 +891,10 @@ fs::path app_image_path(const std::string &owner, const std::string &app) {
     return app_root() / owner / app / "cover.png";
 }
 
+fs::path app_image_version_path(const std::string &owner, const std::string &app, int version) {
+    return version_path(owner, app, version) / "cover.png";
+}
+
 bool save_app_image(const std::string &owner, const std::string &app, const std::string &image_b64) {
     if (image_b64.empty()) return true;
     std::string bytes = base64_decode(image_b64);
@@ -903,8 +907,40 @@ bool save_app_image(const std::string &owner, const std::string &app, const std:
     return true;
 }
 
+bool save_app_image_version(const std::string &owner, const std::string &app, int version, const std::string &image_b64) {
+    if (image_b64.empty()) return true;
+    std::string bytes = base64_decode(image_b64);
+    if (bytes.empty()) return false;
+    fs::path img_path = app_image_version_path(owner, app, version);
+    if (!ensure_dir(img_path.parent_path())) return false;
+    std::ofstream out(img_path, std::ios::binary | std::ios::trunc);
+    if (!out.is_open()) return false;
+    out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    return true;
+}
+
+bool copy_app_image_version(const std::string &owner, const std::string &app, int from_version, int to_version) {
+    fs::path src = app_image_version_path(owner, app, from_version);
+    if (!fs::exists(src)) src = app_image_path(owner, app);
+    if (!fs::exists(src)) return false;
+    fs::path dst = app_image_version_path(owner, app, to_version);
+    if (!ensure_dir(dst.parent_path())) return false;
+    std::error_code ec;
+    fs::copy_file(src, dst, fs::copy_options::overwrite_existing, ec);
+    return !ec;
+}
+
 std::string load_app_image_base64(const std::string &owner, const std::string &app) {
     fs::path img_path = app_image_path(owner, app);
+    std::ifstream in(img_path, std::ios::binary);
+    if (!in.is_open()) return "";
+    std::ostringstream buffer;
+    buffer << in.rdbuf();
+    return base64_encode(buffer.str());
+}
+
+std::string load_app_image_base64_version(const std::string &owner, const std::string &app, int version) {
+    fs::path img_path = app_image_version_path(owner, app, version);
     std::ifstream in(img_path, std::ios::binary);
     if (!in.is_open()) return "";
     std::ostringstream buffer;
@@ -916,6 +952,10 @@ fs::path app_ui_path(const std::string &owner, const std::string &app) {
     return app_root() / owner / app / "ui.json";
 }
 
+fs::path app_ui_version_path(const std::string &owner, const std::string &app, int version) {
+    return version_path(owner, app, version) / "ui.json";
+}
+
 bool save_app_ui(const std::string &owner, const std::string &app, const std::string &json) {
     fs::path path = app_ui_path(owner, app);
     if (!ensure_dir(path.parent_path())) return false;
@@ -925,8 +965,26 @@ bool save_app_ui(const std::string &owner, const std::string &app, const std::st
     return true;
 }
 
+bool save_app_ui_version(const std::string &owner, const std::string &app, int version, const std::string &json) {
+    fs::path path = app_ui_version_path(owner, app, version);
+    if (!ensure_dir(path.parent_path())) return false;
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out.is_open()) return false;
+    out << json;
+    return true;
+}
+
 std::string load_app_ui(const std::string &owner, const std::string &app) {
     fs::path path = app_ui_path(owner, app);
+    std::ifstream in(path, std::ios::binary);
+    if (!in.is_open()) return "";
+    std::ostringstream buffer;
+    buffer << in.rdbuf();
+    return buffer.str();
+}
+
+std::string load_app_ui_version(const std::string &owner, const std::string &app, int version) {
+    fs::path path = app_ui_version_path(owner, app, version);
     std::ifstream in(path, std::ios::binary);
     if (!in.is_open()) return "";
     std::ostringstream buffer;
@@ -1112,6 +1170,7 @@ class Server {
         if (req.method == "POST" && req.path == "/apps/ui/save") return handle_ui_save(req);
         if (req.method == "GET" && req.path == "/apps") return handle_list(req);
         if (req.method == "POST" && req.path == "/apps") return handle_create(req);
+        if (req.method == "POST" && req.path == "/apps/version") return handle_version_publish(req);
         if (req.method == "PUT" && req.path.rfind("/apps/", 0) == 0) return handle_update(req);
         if (req.method == "DELETE" && req.path.rfind("/apps/", 0) == 0) return handle_delete(req);
         if (req.method == "GET" && req.path == "/users") return handle_users_list(req);
@@ -1397,10 +1456,13 @@ class Server {
         write_metadata(ver_path, info);
         AppRecord rec{caller.name, app_name, 1, desc, is_public, access_group};
         db_.upsert_app(rec);
-        if (!image_b64.empty() && !save_app_image(caller.name, app_name, image_b64)) {
-            resp.status = 500;
-            resp.body = "{\"error\":\"cannot save image\"}";
-            return resp;
+        if (!image_b64.empty()) {
+            if (!save_app_image(caller.name, app_name, image_b64) ||
+                !save_app_image_version(caller.name, app_name, 1, image_b64)) {
+                resp.status = 500;
+                resp.body = "{\"error\":\"cannot save image\"}";
+                return resp;
+            }
         }
         resp.body = "{\"status\":\"created\",\"version\":1}";
         return resp;
@@ -1433,18 +1495,100 @@ class Server {
             resp.body = "{\"error\":\"forbidden\"}";
             return resp;
         }
-        bool new_version = extract_json_bool(req.body, "new_version", false);
+        bool requested_new_version = extract_json_bool(req.body, "new_version", false);
         std::string desc = extract_json_string(req.body, "description");
         std::string file_b64 = extract_json_string(req.body, "file_base64");
         std::string access_group = extract_json_string(req.body, "access_group");
         bool public_flag = extract_json_bool(req.body, "public", app.public_access);
         std::string image_b64 = extract_json_string(req.body, "image_base64");
+        if (requested_new_version) {
+            resp.status = 400;
+            resp.body = "{\"error\":\"use /apps/version to publish new versions\"}";
+            return resp;
+        }
         if (!access_group.empty() && !is_safe_name(access_group)) {
             resp.status = 400;
             resp.body = "{\"error\":\"invalid access group\"}";
             return resp;
         }
-        int ver = new_version ? app.latest_version + 1 : app.latest_version;
+        int ver = app.latest_version;
+        fs::path target_path = version_path(app.owner, app.name, ver);
+        if (!ensure_dir(target_path)) {
+            resp.status = 500;
+            resp.body = "{\"error\":\"cannot create folder\"}";
+            return resp;
+        }
+        if (!file_b64.empty()) {
+            std::string content = base64_decode(file_b64);
+            std::ofstream file(target_path / (app_name + ".xlsx"), std::ios::binary | std::ios::trunc);
+            file.write(content.data(), static_cast<std::streamsize>(content.size()));
+        }
+        if (!desc.empty()) app.description = desc;
+        if (!access_group.empty()) app.access_group = access_group;
+        app.public_access = public_flag;
+        app.latest_version = ver;
+        AppInfo info{app_name, ver, app.description};
+        write_metadata(target_path, info);
+        db_.upsert_app(app);
+        if (!image_b64.empty()) {
+            if (!save_app_image(app.owner, app_name, image_b64) ||
+                !save_app_image_version(app.owner, app_name, ver, image_b64)) {
+                resp.status = 500;
+                resp.body = "{\"error\":\"cannot save image\"}";
+                return resp;
+            }
+        }
+        resp.body = "{\"status\":\"updated\",\"version\":" + std::to_string(ver) + "}";
+        return resp;
+    }
+
+    HttpResponse handle_version_publish(const HttpRequest &req) {
+        HttpResponse resp;
+        if (!require_json(req, resp)) return resp;
+        UserRecord caller;
+        if (!authenticate(req, caller, resp)) return resp;
+        std::string owner = extract_json_string(req.body, "owner");
+        if (owner.empty()) owner = caller.name;
+        std::string app_name = extract_json_string(req.body, "name");
+        if (app_name.empty()) {
+            resp.status = 400;
+            resp.body = "{\"error\":\"missing app name\"}";
+            return resp;
+        }
+        if (!is_safe_name(owner) || !is_safe_name(app_name)) {
+            resp.status = 400;
+            resp.body = "{\"error\":\"invalid names\"}";
+            return resp;
+        }
+        AppRecord app;
+        if (!db_.get_app(owner, app_name, app)) {
+            resp.status = 404;
+            resp.body = "{\"error\":\"not found\"}";
+            return resp;
+        }
+        if (app.owner != caller.name && !is_admin(caller, cfg_)) {
+            resp.status = 403;
+            resp.body = "{\"error\":\"forbidden\"}";
+            return resp;
+        }
+        std::string desc = extract_json_string(req.body, "description");
+        std::string file_b64 = extract_json_string(req.body, "file_base64");
+        std::string image_b64 = extract_json_string(req.body, "image_base64");
+        std::string schema_json = extract_json_string(req.body, "schema_json");
+        std::string access_group = extract_json_string(req.body, "access_group");
+        bool public_flag = extract_json_bool(req.body, "public", app.public_access);
+        if (!access_group.empty() && !is_safe_name(access_group)) {
+            resp.status = 400;
+            resp.body = "{\"error\":\"invalid access group\"}";
+            return resp;
+        }
+        if (!schema_json.empty() && schema_json.size() > 256 * 1024) {
+            resp.status = 400;
+            resp.body = "{\"error\":\"schema too large\"}";
+            return resp;
+        }
+        int prev_version = app.latest_version;
+        int ver = prev_version + 1;
         fs::path target_path = version_path(app.owner, app.name, ver);
         if (!ensure_dir(target_path)) {
             resp.status = 500;
@@ -1455,23 +1599,45 @@ class Server {
         bool workbook_ready = false;
         if (!file_b64.empty()) {
             std::string content = base64_decode(file_b64);
-            std::ofstream file(target_file, std::ios::binary);
+            std::ofstream file(target_file, std::ios::binary | std::ios::trunc);
             file.write(content.data(), static_cast<std::streamsize>(content.size()));
             file.close();
             workbook_ready = true;
-        } else if (new_version) {
-            fs::path prev_file = version_path(app.owner, app.name, app.latest_version) / (app_name + ".xlsx");
+        } else {
+            fs::path prev_file = version_path(app.owner, app.name, prev_version) / (app_name + ".xlsx");
             std::error_code ec;
             if (fs::exists(prev_file)) {
                 fs::copy_file(prev_file, target_file, fs::copy_options::overwrite_existing, ec);
                 if (!ec) workbook_ready = true;
             }
-        } else if (fs::exists(target_file)) {
-            workbook_ready = true;
         }
         if (!workbook_ready) {
             resp.status = 400;
             resp.body = "{\"error\":\"workbook missing\"}";
+            return resp;
+        }
+        std::string schema_payload = schema_json;
+        if (schema_payload.empty()) schema_payload = load_app_ui_version(app.owner, app_name, prev_version);
+        if (schema_payload.empty()) schema_payload = load_app_ui(app.owner, app_name);
+        if (schema_payload.empty()) schema_payload = "{\"components\":[]}";
+        if (!save_app_ui_version(app.owner, app_name, ver, schema_payload) ||
+            !save_app_ui(app.owner, app_name, schema_payload)) {
+            resp.status = 500;
+            resp.body = "{\"error\":\"cannot save schema\"}";
+            return resp;
+        }
+        bool had_prior_image = fs::exists(app_image_version_path(app.owner, app.name, prev_version)) ||
+                               fs::exists(app_image_path(app.owner, app.name));
+        bool image_ok = true;
+        if (!image_b64.empty()) {
+            image_ok = save_app_image(app.owner, app_name, image_b64) &&
+                       save_app_image_version(app.owner, app_name, ver, image_b64);
+        } else if (had_prior_image) {
+            image_ok = copy_app_image_version(app.owner, app_name, prev_version, ver);
+        }
+        if (!image_ok) {
+            resp.status = 500;
+            resp.body = "{\"error\":\"cannot persist image\"}";
             return resp;
         }
         if (!desc.empty()) app.description = desc;
@@ -1481,12 +1647,7 @@ class Server {
         AppInfo info{app_name, ver, app.description};
         write_metadata(target_path, info);
         db_.upsert_app(app);
-        if (!image_b64.empty() && !save_app_image(app.owner, app_name, image_b64)) {
-            resp.status = 500;
-            resp.body = "{\"error\":\"cannot save image\"}";
-            return resp;
-        }
-        resp.body = "{\"status\":\"updated\",\"version\":" + std::to_string(ver) + "}";
+        resp.body = "{\"status\":\"version_created\",\"version\":" + std::to_string(ver) + "}";
         return resp;
     }
 
@@ -1504,8 +1665,9 @@ class Server {
             if (!can_access(a, viewer) && !is_admin(viewer, cfg_)) continue;
             if (!first) oss << ",";
             first = false;
-            std::string image_data = load_app_image_base64(a.owner, a.name);
-            bool has_ui = fs::exists(app_ui_path(a.owner, a.name));
+            std::string image_data = load_app_image_base64_version(a.owner, a.name, a.latest_version);
+            if (image_data.empty()) image_data = load_app_image_base64(a.owner, a.name);
+            bool has_ui = fs::exists(app_ui_version_path(a.owner, a.name, a.latest_version)) || fs::exists(app_ui_path(a.owner, a.name));
             oss << "{\"owner\":\"" << json_escape(a.owner) << "\","
                 << "\"name\":\"" << json_escape(a.name) << "\","
                 << "\"latest_version\":" << a.latest_version << ","
@@ -1582,7 +1744,8 @@ class Server {
             resp.body = "{\"error\":\"forbidden\"}";
             return resp;
         }
-        std::string schema = load_app_ui(owner, app_name);
+        std::string schema = load_app_ui_version(owner, app_name, app.latest_version);
+        if (schema.empty()) schema = load_app_ui(owner, app_name);
         if (schema.empty()) schema = "{\"components\":[]}";
         resp.body = "{\"owner\":\"" + json_escape(owner) + "\",\"name\":\"" + json_escape(app_name) + "\",\"schema\":" + schema + "}";
         return resp;
@@ -1626,6 +1789,11 @@ class Server {
         if (!save_app_ui(owner, app_name, schema_json)) {
             resp.status = 500;
             resp.body = "{\"error\":\"cannot save schema\"}";
+            return resp;
+        }
+        if (!save_app_ui_version(owner, app_name, app.latest_version, schema_json)) {
+            resp.status = 500;
+            resp.body = "{\"error\":\"cannot save versioned schema\"}";
             return resp;
         }
         resp.body = "{\"status\":\"saved\"}";
