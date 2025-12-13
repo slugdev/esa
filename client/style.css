@@ -150,6 +150,7 @@ input[type="file"] { padding: 8px; }
   padding: 12px;
   background: #0e1729;
 }
+.app-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .app-card h4 { margin: 0 0 4px; }
 .app-meta { color: var(--muted); font-size: 12px; }
 

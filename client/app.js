@@ -4,6 +4,9 @@
   let currentUser = sessionStorage.getItem('esa_user');
   let role = { admin: false, developer: false };
   let developerOverride = false;
+  let appsCache = [];
+  let formMode = 'create';
+  let editingApp = null;
 
   const qs = (sel) => document.querySelector(sel);
   const qsa = (sel) => Array.from(document.querySelectorAll(sel));
@@ -27,6 +30,9 @@
   const createPanel = qs('#create-panel');
   const createHint = qs('#create-hint');
   const developerPill = qs('#developer-pill');
+  const developerList = qs('#developer-list');
+  const devFormMode = qs('#dev-form-mode');
+  const devCreateNew = qs('#dev-create-new');
   const adminPanel = qs('#admin-panel');
   const adminWarning = qs('#admin-warning');
   const usersArea = qs('#users-area');
@@ -120,9 +126,13 @@
       const res = await fetch(`${apiBase}/apps`, { headers: { ...authHeaders() } });
       if (!res.ok) throw new Error('Failed to load apps');
       const apps = await res.json();
+      appsCache = apps;
       renderApps(apps);
+      renderDeveloperApps();
     } catch (err) {
       renderApps([]);
+      appsCache = [];
+      renderDeveloperApps();
       showToast(err.message || 'Failed to load apps', true);
     }
   }
@@ -139,6 +149,22 @@
   }
 
   const createForm = qs('#create-form');
+  const nameInput = createForm.querySelector('input[name="name"]');
+  const accessInput = createForm.querySelector('input[name="access_group"]');
+  const descInput = createForm.querySelector('input[name="description"]');
+  const publicInput = createForm.querySelector('input[name="public"]');
+  const fileInput = createForm.querySelector('input[name="file"]');
+
+  devCreateNew.addEventListener('click', () => setCreateMode('create'));
+  developerList.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-edit-app]');
+    if (!btn) return;
+    const target = btn.dataset.editApp;
+    const app = appsCache.find(a => a.name === target && (role.admin || a.owner === currentUser));
+    if (!app) return showToast('App not editable', true);
+    setCreateMode('update', app);
+  });
+
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!token) return showToast('Login first', true);
@@ -149,19 +175,39 @@
     const access_group = data.get('access_group').trim();
     const isPublic = data.get('public') === 'on';
     const file = data.get('file');
-    if (!name || !file) return showToast('Name and file required', true);
+    const isUpdate = formMode === 'update';
+    if (!name || (!file && !isUpdate)) return showToast('Name and file required', true);
+    if (isUpdate && !editingApp) return showToast('Select an app to edit', true);
     try {
-      const file_base64 = await fileToBase64(file);
-      const payload = { name, description, file_base64, public: isPublic };
-      if (access_group) payload.access_group = access_group;
-      const res = await fetch(`${apiBase}/apps`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error('Create failed');
-      showToast('Application created');
-      createForm.reset();
+      if (!isUpdate) {
+        const file_base64 = await fileToBase64(file);
+        const payload = { name, description, file_base64, public: isPublic };
+        if (access_group) payload.access_group = access_group;
+        const res = await fetch(`${apiBase}/apps`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Create failed');
+        showToast('Application created');
+      } else {
+        const payload = { description, public: isPublic };
+        if (access_group) payload.access_group = access_group;
+        if (file) {
+          payload.file_base64 = await fileToBase64(file);
+          payload.new_version = true;
+        } else {
+          payload.new_version = false;
+        }
+        const res = await fetch(`${apiBase}/apps/${encodeURIComponent(editingApp.name)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Update failed');
+        showToast('Application updated');
+      }
+      setCreateMode('create');
       await refreshApps();
     } catch (err) {
       showToast(err.message || 'Create failed', true);
@@ -256,11 +302,47 @@
       if (key === 'developer') {
         const canDev = developerOverride || role.developer || role.admin;
         el.classList.toggle('hidden', !show || !canDev || !token);
+        if (show && canDev) renderDeveloperApps();
       } else if (key === 'admin') {
         el.classList.toggle('hidden', !show || !role.admin || !token);
       } else {
         el.classList.toggle('hidden', !show || !token);
       }
     });
+  }
+
+  function renderDeveloperApps() {
+    if (!developerList) return;
+    const canEdit = developerOverride || role.developer || role.admin;
+    if (!token || !canEdit || activeTab !== 'developer') return;
+    const mine = appsCache.filter(a => role.admin || a.owner === currentUser);
+    if (mine.length === 0) {
+      developerList.innerHTML = '<div class="hint">No editable applications yet.</div>';
+      return;
+    }
+    developerList.innerHTML = mine.map(a => {
+      const meta = `${escapeHtml(a.owner)} • Version ${a.latest_version} • ${a.public ? 'Public' : 'Restricted'}`;
+      return `<div class="app-card"><div class="app-card-header"><div><h4>${escapeHtml(a.name)}</h4><div class="app-meta">${meta}</div></div><button type="button" data-edit-app="${escapeHtml(a.name)}">Edit</button></div><p>${escapeHtml(a.description || '')}</p></div>`;
+    }).join('');
+  }
+
+  function setCreateMode(mode, app = null) {
+    formMode = mode;
+    editingApp = app;
+    if (mode === 'create') {
+      devFormMode.textContent = 'Mode: Create new';
+      nameInput.readOnly = false;
+      createForm.reset();
+      fileInput.required = true;
+    } else if (app) {
+      devFormMode.textContent = `Mode: Update ${app.name} (v${app.latest_version})`;
+      nameInput.value = app.name;
+      nameInput.readOnly = true;
+      accessInput.value = app.access_group || '';
+      descInput.value = app.description || '';
+      publicInput.checked = !!app.public;
+      fileInput.value = '';
+      fileInput.required = false;
+    }
   }
 })();

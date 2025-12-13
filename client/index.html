@@ -36,11 +36,18 @@
       <div id="apps-list" class="grid"></div>
     </section>
 
-    <section class="card tab-content" id="create-panel" data-tab="developer" aria-label="Create application">
+    <section class="card tab-content" id="create-panel" data-tab="developer" aria-label="Developer">
       <div class="panel-head">
-        <h2>Create Application</h2>
+        <h2>Developer</h2>
         <span class="pill" id="developer-pill">Developer-only</span>
       </div>
+      <div class="panel-head" style="margin-top:4px;">
+        <h3 style="margin:0;">Your Applications</h3>
+        <button id="dev-create-new" type="button">Create New</button>
+      </div>
+      <div id="developer-list" class="grid"></div>
+      <h3 style="margin-top:16px;">Create / Update</h3>
+      <div class="hint" id="dev-form-mode">Mode: Create new</div>
       <form id="create-form">
         <div class="two-col">
           <label>Name <input name="name" required></label>
