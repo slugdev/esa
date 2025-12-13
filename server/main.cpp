@@ -80,15 +80,42 @@ std::string base64_encode(const std::string &input) {
 // Very small helper to pull primitive values from a flat JSON object.
 std::string extract_json_string(const std::string &body, const std::string &key) {
     std::string token = "\"" + key + "\"";
-    size_t pos = body.find(token);
-    if (pos == std::string::npos) return "";
-    pos = body.find(':', pos);
-    if (pos == std::string::npos) return "";
-    pos = body.find('"', pos);
-    if (pos == std::string::npos) return "";
-    size_t end = body.find('"', pos + 1);
-    if (end == std::string::npos) return "";
-    return body.substr(pos + 1, end - pos - 1);
+    size_t key_pos = body.find(token);
+    if (key_pos == std::string::npos) return "";
+    size_t colon = body.find(':', key_pos);
+    if (colon == std::string::npos) return "";
+    size_t start = body.find('"', colon);
+    if (start == std::string::npos) return "";
+    ++start; // move past opening quote
+    std::string result;
+    bool escape = false;
+    for (size_t i = start; i < body.size(); ++i) {
+        char ch = body[i];
+        if (escape) {
+            switch (ch) {
+                case '"': result.push_back('"'); break;
+                case '\\': result.push_back('\\'); break;
+                case '/': result.push_back('/'); break;
+                case 'b': result.push_back('\b'); break;
+                case 'f': result.push_back('\f'); break;
+                case 'n': result.push_back('\n'); break;
+                case 'r': result.push_back('\r'); break;
+                case 't': result.push_back('\t'); break;
+                default: result.push_back(ch); break;
+            }
+            escape = false;
+            continue;
+        }
+        if (ch == '\\') {
+            escape = true;
+            continue;
+        }
+        if (ch == '"') {
+            return result;
+        }
+        result.push_back(ch);
+    }
+    return "";
 }
 
 int extract_json_int(const std::string &body, const std::string &key, int def = 0) {
