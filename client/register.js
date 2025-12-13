@@ -1,5 +1,5 @@
 (() => {
-  const apiBase = window.location.origin;
+  const apiBase = 'http://localhost:8080';
   const toastEl = document.querySelector('#toast');
   const showToast = (msg, isError = false) => {
     toastEl.textContent = msg;

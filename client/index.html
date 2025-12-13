@@ -23,6 +23,12 @@
   </header>
 
   <main>
+    <div class="tabs" id="tabs">
+      <button class="tab-btn active" data-tab-btn="apps">Applications</button>
+      <button class="tab-btn" data-tab-btn="developer">Developer</button>
+      <button class="tab-btn" data-tab-btn="admin">Admin</button>
+    </div>
+
     <section class="card" id="apps-panel">
       <div class="panel-head">
         <h2>Applications</h2>
@@ -31,7 +37,7 @@
       <div id="apps-list" class="grid"></div>
     </section>
 
-    <section class="card" id="create-panel" aria-label="Create application">
+    <section class="card tab-content" id="create-panel" data-tab="developer" aria-label="Create application">
       <div class="panel-head">
         <h2>Create Application</h2>
         <span class="pill" id="developer-pill">Developer-only</span>
@@ -57,7 +63,7 @@
       <p id="create-hint" class="hint">Visible only when your role is Developer or Admin. If the server does not expose roles, you can force-enable once logged in.</p>
     </section>
 
-    <section class="card" id="admin-panel" aria-label="Admin actions">
+    <section class="card tab-content" id="admin-panel" data-tab="admin" aria-label="Admin actions">
       <div class="panel-head">
         <h2>Admin</h2>
         <span class="pill warning">Admin-only</span>

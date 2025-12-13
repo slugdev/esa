@@ -121,6 +121,9 @@ bool json_has_key(const std::string &body, const std::string &key) {
     return body.find("\"" + key + "\"") != std::string::npos;
 }
 
+// Forward declarations
+std::string variant_to_json(const VARIANT &v);
+
 // -------------------- Config --------------------
 struct Config {
     int port = 8080;
@@ -801,6 +804,9 @@ void send_response(SOCKET s, const HttpResponse &resp) {
     oss << "HTTP/1.1 " << resp.status << "\r\n";
     oss << "Content-Type: " << resp.content_type << "\r\n";
     oss << "Content-Length: " << resp.body.size() << "\r\n";
+    oss << "Access-Control-Allow-Origin: *\r\n";
+    oss << "Access-Control-Allow-Headers: Content-Type, Authorization\r\n";
+    oss << "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n";
     oss << "Connection: close\r\n\r\n";
     oss << resp.body;
     std::string data = oss.str();
@@ -998,6 +1004,13 @@ class Server {
     }
 
     HttpResponse dispatch(const HttpRequest &req) {
+        if (req.method == "OPTIONS") {
+            HttpResponse resp;
+            resp.status = 200;
+            resp.body = "";
+            return resp;
+        }
+        if (req.method == "GET" && req.path == "/health") return handle_health(req);
         if (req.method == "POST" && req.path == "/login") return handle_login(req);
         if (req.method == "POST" && req.path == "/logout") return handle_logout(req);
         if (req.method == "POST" && req.path == "/excel/load") return handle_excel_load(req);
@@ -1077,6 +1090,12 @@ class Server {
         HttpResponse resp;
         std::string token = bearer_token(req);
         if (!token.empty()) sessions_.logout(token);
+        resp.body = "{\"status\":\"ok\"}";
+        return resp;
+    }
+
+    HttpResponse handle_health(const HttpRequest &) {
+        HttpResponse resp;
         resp.body = "{\"status\":\"ok\"}";
         return resp;
     }

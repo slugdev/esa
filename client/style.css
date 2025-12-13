@@ -1,22 +1,22 @@
 :root {
-  --bg: #0f1629;
-  --panel: #151d33;
-  --border: #253254;
-  --accent: #5ee0a3;
-  --accent-strong: #2ad17d;
-  --text: #e9eefb;
-  --muted: #9fb2d1;
+  --bg: #0b162b;
+  --panel: rgba(14, 26, 48, 0.92);
+  --border: #1f375c;
+  --accent: #5ab3ff;
+  --accent-strong: #7cc4ff;
+  --text: #eef3ff;
+  --muted: #a8badd;
   --warn: #f8c165;
   --error: #ff6b6b;
-  --radius: 12px;
-  --shadow: 0 12px 36px rgba(0,0,0,0.28);
-  --font: "Segoe UI", "Segoe UI Variable", "Helvetica Neue", sans-serif;
+  --radius: 14px;
+  --shadow: 0 14px 40px rgba(5, 10, 30, 0.45);
+  --font: "Segoe UI", "Inter", "Helvetica Neue", sans-serif;
 }
 
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  background: radial-gradient(120% 120% at 20% 20%, #1b2a4a 0%, #0f1629 50%, #0b1120 100%);
+  background: radial-gradient(140% 140% at 20% 20%, #10254a 0%, #0b162b 45%, #081021 100%);
   color: var(--text);
   font-family: var(--font);
   line-height: 1.5;
@@ -28,16 +28,16 @@ header.hero {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px clamp(16px, 4vw, 48px);
+  padding: 24px clamp(18px, 5vw, 64px);
 }
 
 .brand { display: flex; align-items: center; gap: 12px; }
 .logo {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  color: #0a111f;
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, var(--accent-strong), var(--accent));
+  color: #061023;
   display: grid;
   place-items: center;
   font-weight: 800;
@@ -51,8 +51,35 @@ header.hero {
 main {
   display: grid;
   gap: 18px;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  padding: 0 clamp(16px, 4vw, 48px) 48px;
+  grid-template-columns: 1fr;
+  max-width: 1100px;
+  margin: 0 auto 48px;
+  padding: 0 clamp(18px, 5vw, 64px);
+}
+
+.tabs {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 0 clamp(18px, 5vw, 64px);
+  margin-bottom: 4px;
+}
+
+.tab-btn {
+  background: rgba(14, 26, 48, 0.75);
+  border: 1px solid rgba(90, 179, 255, 0.25);
+  color: var(--muted);
+  padding: 10px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.tab-btn.active {
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  color: #051027;
+  border-color: transparent;
+  box-shadow: var(--shadow);
 }
 
 main.auth {
@@ -73,7 +100,7 @@ main.auth .actions {
 
 .card {
   background: var(--panel);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(90, 179, 255, 0.22);
   border-radius: var(--radius);
   padding: 16px;
   box-shadow: var(--shadow);
@@ -93,14 +120,14 @@ input, select, button {
 input:focus, select:focus, button:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 button {
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  color: #0d1324;
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  color: #051027;
   border: none;
   font-weight: 700;
   cursor: pointer;
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
-button:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(94,224,163,0.35); }
+button:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(90,179,255,0.35); }
 button:active { transform: translateY(0); }
 button.ghost {
   background: transparent;
@@ -140,8 +167,8 @@ input[type="file"] { padding: 8px; }
 .pill.warning { color: var(--warn); border-color: rgba(248,193,101,0.4); }
 
 #users-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-#users-table th, #users-table td { border: 1px solid var(--border); padding: 8px; text-align: left; }
-#users-table th { background: #101a2f; }
+#users-table th, #users-table td { border: 1px solid rgba(90, 179, 255, 0.2); padding: 8px; text-align: left; }
+#users-table th { background: rgba(17, 34, 61, 0.9); }
 
 .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
 

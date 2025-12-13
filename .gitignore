@@ -23,6 +23,7 @@
 
 # Database and uploads
 /server/db.bin
+db.bin
 /app/
 
 # OS / editor noise

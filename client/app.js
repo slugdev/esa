@@ -1,6 +1,5 @@
 (() => {
-  const urlApi = new URLSearchParams(location.search).get('api');
-  const apiBase = urlApi || (location.origin === 'null' ? 'http://localhost:8080' : window.location.origin); // adjust if server runs elsewhere
+  const apiBase = 'http://localhost:8080'; // hardcoded ESA API base
   let token = sessionStorage.getItem('esa_token');
   let currentUser = sessionStorage.getItem('esa_user');
   let role = { admin: false, developer: false };
@@ -31,6 +30,17 @@
   const adminPanel = qs('#admin-panel');
   const adminWarning = qs('#admin-warning');
   const usersArea = qs('#users-area');
+  const tabButtons = {
+    apps: qs('[data-tab-btn="apps"]'),
+    developer: qs('[data-tab-btn="developer"]'),
+    admin: qs('[data-tab-btn="admin"]')
+  };
+  const tabContents = {
+    apps: qs('#apps-panel'),
+    developer: qs('[data-tab="developer"]'),
+    admin: qs('[data-tab="admin"]')
+  };
+  let activeTab = 'apps';
 
   if (!token || !currentUser) {
     window.location.replace('login.html');
@@ -39,6 +49,10 @@
 
   sessionInfo.classList.remove('hidden');
   sessionUser.textContent = `Signed in as ${currentUser}`;
+
+  Object.entries(tabButtons).forEach(([key, btn]) => {
+    btn.addEventListener('click', () => setTab(key));
+  });
 
   logoutBtn.addEventListener('click', async () => {
     try { await fetch(`${apiBase}/logout`, { method: 'POST', headers: authHeaders() }); } catch (_) {}
@@ -82,11 +96,15 @@
   function toggleCreateVisibility() {
     const canDev = developerOverride || role.developer || role.admin;
     const signedIn = !!token;
-    createPanel.classList.toggle('hidden', !canDev || !signedIn);
+    createPanel.classList.toggle('hidden', !canDev || !signedIn || activeTab !== 'developer');
     createHint.classList.toggle('hidden', canDev && signedIn);
     developerPill.classList.toggle('hidden', canDev && signedIn);
-    qs('#apps-panel').classList.toggle('hidden', !signedIn);
-    adminPanel.classList.toggle('hidden', !signedIn);
+    tabButtons.developer.classList.toggle('hidden', !canDev || !signedIn);
+    tabContents.apps.classList.toggle('hidden', !signedIn || activeTab !== 'apps');
+    adminPanel.classList.toggle('hidden', !signedIn || activeTab !== 'admin');
+    tabButtons.admin.classList.toggle('hidden', !role.admin || !signedIn);
+    if (activeTab === 'developer' && (!canDev || !signedIn)) setTab('apps');
+    if (activeTab === 'admin' && (!role.admin || !signedIn)) setTab('apps');
   }
 
   qs('#developer-override').addEventListener('click', () => {
@@ -228,4 +246,23 @@
     await refreshApps();
     if (role.admin) await loadUsers();
   })();
+
+  function setTab(tab) {
+    activeTab = tab;
+    Object.entries(tabButtons).forEach(([key, btn]) => {
+      btn.classList.toggle('active', key === tab);
+    });
+    Object.entries(tabContents).forEach(([key, el]) => {
+      if (!el) return;
+      const show = key === tab;
+      if (key === 'developer') {
+        const canDev = developerOverride || role.developer || role.admin;
+        el.classList.toggle('hidden', !show || !canDev || !token);
+      } else if (key === 'admin') {
+        el.classList.toggle('hidden', !show || !role.admin || !token);
+      } else {
+        el.classList.toggle('hidden', !show || !token);
+      }
+    });
+  }
 })();
