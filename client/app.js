@@ -70,7 +70,8 @@
     window.location.replace('login.html');
   });
 
-  backToLogin.addEventListener('click', () => {
+  if (token && backToLogin) backToLogin.remove();
+  backToLogin?.addEventListener('click', () => {
     clearSession();
     window.location.href = 'login.html';
   });
