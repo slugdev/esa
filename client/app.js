@@ -114,8 +114,6 @@
     showToast('Developer UI forced for this session');
   });
 
-  qs('#refresh-apps').addEventListener('click', refreshApps);
-
   async function refreshApps() {
     if (!token) { showToast('Login first', true); return; }
     try {
