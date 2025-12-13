@@ -213,13 +213,13 @@
       return;
     }
     list.innerHTML = apps.map(a => {
-      const img = a.image_base64 ? `<img src="data:image/png;base64,${a.image_base64}" alt="${escapeHtml(a.name)} preview">` : '';
+      const icon = renderAppIcon(a);
       const canAuthor = (developerOverride || role.developer || role.admin) && (role.admin || a.owner === currentUser);
       const launchLabel = a.has_ui ? 'Launch' : 'Launch (No UI)';
       const launchBtn = `<button type="button" data-launch-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">${launchLabel}</button>`;
       const designBtn = canAuthor ? `<button type="button" class="ghost" data-design-app="${escapeHtml(a.name)}" data-design-owner="${escapeHtml(a.owner)}">Design UI</button>` : '';
       const statusMeta = a.has_ui ? 'UI ready' : 'UI not authored yet';
-      return `<div class="app-card">${img}<h4>${escapeHtml(a.name)}</h4><div class="app-meta">Owner: ${escapeHtml(a.owner)} • Version ${a.latest_version}</div><div class="app-meta">${a.public ? 'Public' : 'Restricted'} • ${statusMeta}</div><p>${escapeHtml(a.description || '')}</p><div class="app-buttons">${launchBtn}${designBtn}</div></div>`;
+      return `<div class="app-card"><div class="app-card-top">${icon}<div><h4>${escapeHtml(a.name)}</h4><div class="app-meta">Owner: ${escapeHtml(a.owner)} • Version ${a.latest_version}</div></div></div><div class="app-meta">${a.public ? 'Public' : 'Restricted'} • ${statusMeta}</div><p>${escapeHtml(a.description || '')}</p><div class="app-buttons">${launchBtn}${designBtn}</div></div>`;
     }).join('');
   }
 
@@ -746,8 +746,8 @@
     }
     developerList.innerHTML = mine.map(a => {
       const meta = `${escapeHtml(a.owner)} • Version ${a.latest_version} • ${a.public ? 'Public' : 'Restricted'}`;
-      const img = a.image_base64 ? `<img src="data:image/png;base64,${a.image_base64}" alt="${escapeHtml(a.name)} preview">` : '';
-      return `<div class="app-card">${img}<div class="app-card-header"><div><h4>${escapeHtml(a.name)}</h4><div class="app-meta">${meta}</div></div><div class="app-buttons"><button type="button" data-edit-app="${escapeHtml(a.name)}">Edit</button><button type="button" class="ghost" data-builder-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">Design UI</button></div></div><p>${escapeHtml(a.description || '')}</p></div>`;
+      const icon = renderAppIcon(a);
+      return `<div class="app-card"><div class="app-card-top">${icon}<div><h4>${escapeHtml(a.name)}</h4><div class="app-meta">${meta}</div></div></div><div class="app-card-header"><div class="app-buttons"><button type="button" data-edit-app="${escapeHtml(a.name)}">Edit</button><button type="button" class="ghost" data-builder-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">Design UI</button></div></div><p>${escapeHtml(a.description || '')}</p></div>`;
     }).join('');
   }
 
@@ -811,5 +811,13 @@
 
   function createComponentId() {
     return 'cmp-' + Math.random().toString(36).slice(2, 9);
+  }
+
+  function renderAppIcon(app) {
+    if (app?.image_base64) {
+      return `<img class="app-icon" src="data:image/png;base64,${app.image_base64}" alt="${escapeHtml(app.name)} icon">`;
+    }
+    const letter = escapeHtml((app?.name || '?').charAt(0).toUpperCase());
+    return `<div class="app-icon placeholder">${letter}</div>`;
   }
 })();

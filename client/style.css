@@ -176,14 +176,17 @@ input[type="file"] { padding: 8px; }
   padding: 12px;
   background: #0e1729;
 }
-.app-card img {
-  width: 100%;
-  height: 150px;
+.app-card-top { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+.app-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 14px;
   object-fit: cover;
-  border-radius: 8px;
-  margin-bottom: 10px;
-  border: 1px solid rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  flex-shrink: 0;
 }
+.app-icon.placeholder { display: grid; place-items: center; font-weight: 700; font-size: 20px; color: var(--accent-strong); }
 .app-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .app-card h4 { margin: 0 0 4px; }
 .app-meta { color: var(--muted); font-size: 12px; }
