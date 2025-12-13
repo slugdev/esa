@@ -1451,10 +1451,28 @@ class Server {
             resp.body = "{\"error\":\"cannot create folder\"}";
             return resp;
         }
+        fs::path target_file = target_path / (app_name + ".xlsx");
+        bool workbook_ready = false;
         if (!file_b64.empty()) {
             std::string content = base64_decode(file_b64);
-            std::ofstream file(target_path / (app_name + ".xlsx"), std::ios::binary);
+            std::ofstream file(target_file, std::ios::binary);
             file.write(content.data(), static_cast<std::streamsize>(content.size()));
+            file.close();
+            workbook_ready = true;
+        } else if (new_version) {
+            fs::path prev_file = version_path(app.owner, app.name, app.latest_version) / (app_name + ".xlsx");
+            std::error_code ec;
+            if (fs::exists(prev_file)) {
+                fs::copy_file(prev_file, target_file, fs::copy_options::overwrite_existing, ec);
+                if (!ec) workbook_ready = true;
+            }
+        } else if (fs::exists(target_file)) {
+            workbook_ready = true;
+        }
+        if (!workbook_ready) {
+            resp.status = 400;
+            resp.body = "{\"error\":\"workbook missing\"}";
+            return resp;
         }
         if (!desc.empty()) app.description = desc;
         if (!access_group.empty()) app.access_group = access_group;
