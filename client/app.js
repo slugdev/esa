@@ -33,6 +33,10 @@
   const developerList = qs('#developer-list');
   const devFormMode = qs('#dev-form-mode');
   const devCreateNew = qs('#dev-create-new');
+  const devModal = qs('#dev-modal');
+  const devModalClose = qs('#dev-modal-close');
+  const devModalCancel = qs('#dev-modal-cancel');
+  const bodyEl = document.body;
   const adminPanel = qs('#admin-panel');
   const adminWarning = qs('#admin-warning');
   const usersArea = qs('#users-area');
@@ -109,6 +113,9 @@
     tabContents.apps.classList.toggle('hidden', !signedIn || activeTab !== 'apps');
     adminPanel.classList.toggle('hidden', !signedIn || activeTab !== 'admin');
     tabButtons.admin.classList.toggle('hidden', !role.admin || !signedIn);
+    if ((!canDev || !signedIn) && devModal && !devModal.classList.contains('hidden')) {
+      closeDevModal(true);
+    }
     if (activeTab === 'developer' && (!canDev || !signedIn)) setTab('apps');
     if (activeTab === 'admin' && (!role.admin || !signedIn)) setTab('apps');
   }
@@ -118,6 +125,19 @@
     developerOverride = true;
     toggleCreateVisibility();
     showToast('Developer UI forced for this session');
+  });
+
+  if (devModalClose) devModalClose.addEventListener('click', () => closeDevModal(true));
+  if (devModalCancel) devModalCancel.addEventListener('click', () => closeDevModal(true));
+  if (devModal) {
+    devModal.addEventListener('click', (e) => {
+      if (e.target === devModal) closeDevModal(true);
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && devModal && !devModal.classList.contains('hidden')) {
+      closeDevModal(true);
+    }
   });
 
   async function refreshApps() {
@@ -155,15 +175,23 @@
   const publicInput = createForm.querySelector('input[name="public"]');
   const fileInput = createForm.querySelector('input[name="file"]');
 
-  devCreateNew.addEventListener('click', () => setCreateMode('create'));
-  developerList.addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-edit-app]');
-    if (!btn) return;
-    const target = btn.dataset.editApp;
-    const app = appsCache.find(a => a.name === target && (role.admin || a.owner === currentUser));
-    if (!app) return showToast('App not editable', true);
-    setCreateMode('update', app);
-  });
+  if (devCreateNew) {
+    devCreateNew.addEventListener('click', () => {
+      setCreateMode('create');
+      openDevModal();
+    });
+  }
+  if (developerList) {
+    developerList.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-edit-app]');
+      if (!btn) return;
+      const target = btn.dataset.editApp;
+      const app = appsCache.find(a => a.name === target && (role.admin || a.owner === currentUser));
+      if (!app) return showToast('App not editable', true);
+      setCreateMode('update', app);
+      openDevModal();
+    });
+  }
 
   createForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -208,6 +236,7 @@
         showToast('Application updated');
       }
       setCreateMode('create');
+      closeDevModal();
       await refreshApps();
     } catch (err) {
       showToast(err.message || 'Create failed', true);
@@ -344,5 +373,18 @@
       fileInput.value = '';
       fileInput.required = false;
     }
+  }
+
+  function openDevModal() {
+    if (!devModal) return;
+    devModal.classList.remove('hidden');
+    bodyEl.classList.add('modal-open');
+  }
+
+  function closeDevModal(resetForm = false) {
+    if (!devModal) return;
+    devModal.classList.add('hidden');
+    bodyEl.classList.remove('modal-open');
+    if (resetForm) setCreateMode('create');
   }
 })();

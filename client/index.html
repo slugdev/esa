@@ -46,26 +46,6 @@
         <button id="dev-create-new" type="button">Create New</button>
       </div>
       <div id="developer-list" class="grid"></div>
-      <h3 style="margin-top:16px;">Create / Update</h3>
-      <div class="hint" id="dev-form-mode">Mode: Create new</div>
-      <form id="create-form">
-        <div class="two-col">
-          <label>Name <input name="name" required></label>
-          <label>Access Group <input name="access_group" placeholder="optional"></label>
-        </div>
-        <label>Description <input name="description"></label>
-        <div class="row">
-          <label class="checkbox"><input type="checkbox" name="public" checked> Public</label>
-          <label class="file">
-            <span>Select .xlsx file</span>
-            <input type="file" name="file" accept=".xlsx" required>
-          </label>
-        </div>
-        <div class="actions">
-          <button type="submit">Upload</button>
-          <button type="button" id="developer-override" class="ghost">Force Developer UI</button>
-        </div>
-      </form>
       <p id="create-hint" class="hint">Visible only when your role is Developer or Admin. If the server does not expose roles, you can force-enable once logged in.</p>
     </section>
 
@@ -101,6 +81,35 @@
       </div>
     </section>
   </main>
+
+  <div id="dev-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="dev-modal-title">
+      <div class="modal-head">
+        <h3 id="dev-modal-title">Create / Update Application</h3>
+        <button type="button" id="dev-modal-close" class="ghost icon-btn" aria-label="Close dialog">&#10005;</button>
+      </div>
+      <div class="hint" id="dev-form-mode">Mode: Create new</div>
+      <form id="create-form">
+        <div class="two-col">
+          <label>Name <input name="name" required></label>
+          <label>Access Group <input name="access_group" placeholder="optional"></label>
+        </div>
+        <label>Description <input name="description"></label>
+        <div class="row">
+          <label class="checkbox"><input type="checkbox" name="public" checked> Public</label>
+          <label class="file">
+            <span>Select .xlsx file</span>
+            <input type="file" name="file" accept=".xlsx" required>
+          </label>
+        </div>
+        <div class="actions">
+          <button type="submit">Save</button>
+          <button type="button" id="dev-modal-cancel" class="ghost">Cancel</button>
+          <button type="button" id="developer-override" class="ghost">Force Developer UI</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <div id="toast" class="toast hidden"></div>
   <script src="app.js"></script>
