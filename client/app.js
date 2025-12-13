@@ -165,7 +165,8 @@
       return;
     }
     list.innerHTML = apps.map(a => {
-      return `<div class="app-card"><h4>${escapeHtml(a.name)}</h4><div class="app-meta">Owner: ${escapeHtml(a.owner)} • Version ${a.latest_version}</div><div class="app-meta">${a.public ? 'Public' : 'Restricted'}</div><p>${escapeHtml(a.description || '')}</p></div>`;
+      const img = a.image_base64 ? `<img src="data:image/png;base64,${a.image_base64}" alt="${escapeHtml(a.name)} preview">` : '';
+      return `<div class="app-card">${img}<h4>${escapeHtml(a.name)}</h4><div class="app-meta">Owner: ${escapeHtml(a.owner)} • Version ${a.latest_version}</div><div class="app-meta">${a.public ? 'Public' : 'Restricted'}</div><p>${escapeHtml(a.description || '')}</p></div>`;
     }).join('');
   }
 
@@ -175,6 +176,7 @@
   const descInput = createForm.querySelector('input[name="description"]');
   const publicInput = createForm.querySelector('input[name="public"]');
   const fileInput = createForm.querySelector('input[name="file"]');
+  const imageInput = createForm.querySelector('input[name="image"]');
 
   if (devCreateNew) {
     devCreateNew.addEventListener('click', () => {
@@ -208,10 +210,13 @@
     if (!name || (!file && !isUpdate)) return showToast('Name and file required', true);
     if (isUpdate && !editingApp) return showToast('Select an app to edit', true);
     try {
+      const imageFile = imageInput && imageInput.files ? imageInput.files[0] : null;
+      const image_base64 = imageFile ? await resizeImageFile(imageFile) : null;
       if (!isUpdate) {
         const file_base64 = await fileToBase64(file);
         const payload = { name, description, file_base64, public: isPublic };
         if (access_group) payload.access_group = access_group;
+        if (image_base64) payload.image_base64 = image_base64;
         const res = await fetch(`${apiBase}/apps`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -228,6 +233,7 @@
         } else {
           payload.new_version = false;
         }
+        if (image_base64) payload.image_base64 = image_base64;
         const res = await fetch(`${apiBase}/apps/${encodeURIComponent(editingApp.name)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...authHeaders() },
@@ -304,6 +310,29 @@
     reader.readAsDataURL(file);
   });
 
+  const resizeImageFile = (file, maxSize = 512) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = Math.max(img.width, img.height);
+        const scale = maxDim > maxSize ? maxSize / maxDim : 1;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const base64 = canvas.toDataURL('image/png', 0.85).split(',')[1];
+        resolve(base64);
+      };
+      img.onerror = () => reject(new Error('Image decode failed'));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(reader.error || new Error('Image read failed'));
+    reader.readAsDataURL(file);
+  });
+
   function clearSession() {
     sessionStorage.removeItem('esa_token');
     sessionStorage.removeItem('esa_user');
@@ -352,7 +381,8 @@
     }
     developerList.innerHTML = mine.map(a => {
       const meta = `${escapeHtml(a.owner)} • Version ${a.latest_version} • ${a.public ? 'Public' : 'Restricted'}`;
-      return `<div class="app-card"><div class="app-card-header"><div><h4>${escapeHtml(a.name)}</h4><div class="app-meta">${meta}</div></div><button type="button" data-edit-app="${escapeHtml(a.name)}">Edit</button></div><p>${escapeHtml(a.description || '')}</p></div>`;
+      const img = a.image_base64 ? `<img src="data:image/png;base64,${a.image_base64}" alt="${escapeHtml(a.name)} preview">` : '';
+      return `<div class="app-card">${img}<div class="app-card-header"><div><h4>${escapeHtml(a.name)}</h4><div class="app-meta">${meta}</div></div><button type="button" data-edit-app="${escapeHtml(a.name)}">Edit</button></div><p>${escapeHtml(a.description || '')}</p></div>`;
     }).join('');
   }
 
@@ -365,6 +395,7 @@
       createForm.reset();
       publicInput.checked = false;
       fileInput.required = true;
+      if (imageInput) imageInput.value = '';
     } else if (app) {
       devFormMode.textContent = `Mode: Update ${app.name} (v${app.latest_version})`;
       nameInput.value = app.name;
@@ -374,6 +405,7 @@
       publicInput.checked = !!app.public;
       fileInput.value = '';
       fileInput.required = false;
+      if (imageInput) imageInput.value = '';
     }
   }
 

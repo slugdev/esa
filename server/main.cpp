@@ -59,6 +59,23 @@ std::string base64_decode(const std::string &input) {
     return out;
 }
 
+std::string base64_encode(const std::string &input) {
+    std::string out;
+    int val = 0;
+    int valb = -6;
+    for (unsigned char c : input) {
+        val = (val << 8) + c;
+        valb += 8;
+        while (valb >= 0) {
+            out.push_back(kBase64Alphabet[(val >> valb) & 0x3F]);
+            valb -= 6;
+        }
+    }
+    if (valb > -6) out.push_back(kBase64Alphabet[((val << 8) >> (valb + 8)) & 0x3F]);
+    while (out.size() % 4) out.push_back('=');
+    return out;
+}
+
 // -------------------- Utility: naive JSON extraction --------------------
 // Very small helper to pull primitive values from a flat JSON object.
 std::string extract_json_string(const std::string &body, const std::string &key) {
@@ -843,6 +860,31 @@ fs::path version_path(const std::string &owner, const std::string &app, int vers
     return app_root() / owner / app / std::to_string(version);
 }
 
+fs::path app_image_path(const std::string &owner, const std::string &app) {
+    return app_root() / owner / app / "cover.png";
+}
+
+bool save_app_image(const std::string &owner, const std::string &app, const std::string &image_b64) {
+    if (image_b64.empty()) return true;
+    std::string bytes = base64_decode(image_b64);
+    if (bytes.empty()) return false;
+    fs::path img_path = app_image_path(owner, app);
+    if (!ensure_dir(img_path.parent_path())) return false;
+    std::ofstream out(img_path, std::ios::binary | std::ios::trunc);
+    if (!out.is_open()) return false;
+    out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    return true;
+}
+
+std::string load_app_image_base64(const std::string &owner, const std::string &app) {
+    fs::path img_path = app_image_path(owner, app);
+    std::ifstream in(img_path, std::ios::binary);
+    if (!in.is_open()) return "";
+    std::ostringstream buffer;
+    buffer << in.rdbuf();
+    return base64_encode(buffer.str());
+}
+
 bool write_metadata(const fs::path &p, const AppInfo &info) {
     std::ofstream out(p / "meta.txt", std::ios::trunc);
     if (!out) return false;
@@ -1267,6 +1309,7 @@ class Server {
         std::string desc = extract_json_string(req.body, "description");
         std::string file_b64 = extract_json_string(req.body, "file_base64");
         std::string access_group = extract_json_string(req.body, "access_group");
+        std::string image_b64 = extract_json_string(req.body, "image_base64");
         bool is_public = extract_json_bool(req.body, "public", false);
         if (app_name.empty() || file_b64.empty()) {
             resp.status = 400;
@@ -1303,6 +1346,11 @@ class Server {
         write_metadata(ver_path, info);
         AppRecord rec{caller.name, app_name, 1, desc, is_public, access_group};
         db_.upsert_app(rec);
+        if (!image_b64.empty() && !save_app_image(caller.name, app_name, image_b64)) {
+            resp.status = 500;
+            resp.body = "{\"error\":\"cannot save image\"}";
+            return resp;
+        }
         resp.body = "{\"status\":\"created\",\"version\":1}";
         return resp;
     }
@@ -1339,6 +1387,7 @@ class Server {
         std::string file_b64 = extract_json_string(req.body, "file_base64");
         std::string access_group = extract_json_string(req.body, "access_group");
         bool public_flag = extract_json_bool(req.body, "public", app.public_access);
+        std::string image_b64 = extract_json_string(req.body, "image_base64");
         if (!access_group.empty() && !is_safe_name(access_group)) {
             resp.status = 400;
             resp.body = "{\"error\":\"invalid access group\"}";
@@ -1363,6 +1412,11 @@ class Server {
         AppInfo info{app_name, ver, app.description};
         write_metadata(target_path, info);
         db_.upsert_app(app);
+        if (!image_b64.empty() && !save_app_image(app.owner, app_name, image_b64)) {
+            resp.status = 500;
+            resp.body = "{\"error\":\"cannot save image\"}";
+            return resp;
+        }
         resp.body = "{\"status\":\"updated\",\"version\":" + std::to_string(ver) + "}";
         return resp;
     }
@@ -1381,12 +1435,14 @@ class Server {
             if (!can_access(a, viewer) && !is_admin(viewer, cfg_)) continue;
             if (!first) oss << ",";
             first = false;
+            std::string image_data = load_app_image_base64(a.owner, a.name);
             oss << "{\"owner\":\"" << json_escape(a.owner) << "\","
                 << "\"name\":\"" << json_escape(a.name) << "\","
                 << "\"latest_version\":" << a.latest_version << ","
                 << "\"description\":\"" << json_escape(a.description) << "\","
                 << "\"public\":" << (a.public_access ? "true" : "false") << ","
-                << "\"access_group\":\"" << json_escape(a.access_group) << "\"}";
+                << "\"access_group\":\"" << json_escape(a.access_group) << "\"," 
+                << "\"image_base64\":\"" << json_escape(image_data) << "\"}";
         }
         oss << "]";
         return oss.str();
