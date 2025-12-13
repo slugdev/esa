@@ -33,7 +33,25 @@
       <div class="panel-head">
         <h2>Applications</h2>
       </div>
-      <div id="apps-list" class="grid"></div>
+      <div class="apps-layout">
+        <div id="apps-list" class="grid"></div>
+        <div id="app-workspace">
+          <div class="workspace-head">
+            <div>
+              <h3 id="app-workspace-title">Select an application</h3>
+              <p class="hint" id="app-workspace-desc">Launch an application to render its authored UI.</p>
+            </div>
+            <div class="workspace-actions">
+              <button type="button" id="app-refresh" class="ghost" disabled>Refresh Data</button>
+              <button type="button" id="app-exit" class="ghost" disabled>Close Workbook</button>
+            </div>
+          </div>
+          <div id="app-ui-body" class="workspace-body">
+            <div class="hint" id="app-ui-empty">Choose an application to load its interface.</div>
+            <form id="app-ui-form" class="hidden"></form>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section class="card tab-content" id="create-panel" data-tab="developer" aria-label="Developer">
@@ -112,6 +130,58 @@
           <button type="button" id="developer-override" class="ghost">Force Developer UI</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div id="ui-builder-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="dialog" aria-modal="true" aria-labelledby="ui-builder-title">
+      <div class="modal-head">
+        <h3 id="ui-builder-title">Application UI Builder</h3>
+        <button type="button" id="ui-builder-close" class="ghost icon-btn" aria-label="Close dialog">&#10005;</button>
+      </div>
+      <p class="hint">Map Excel cell references to fields and displays. Save to publish your experience.</p>
+      <div class="builder-shell">
+        <div class="builder-list">
+          <div class="builder-list-head">
+            <h4>Components</h4>
+            <span id="builder-app-label" class="pill">No app</span>
+          </div>
+          <div id="builder-components" class="builder-components"></div>
+          <div id="builder-empty" class="hint">No components yet. Add one using the form.</div>
+        </div>
+        <form id="builder-form" class="builder-form">
+          <input type="hidden" name="component_id" id="builder-component-id">
+          <label>Label
+            <input name="label" id="builder-label" required>
+          </label>
+          <div class="two-col">
+            <label>Sheet <input name="sheet" id="builder-sheet" placeholder="Sheet1" required></label>
+            <label>Cell / Range <input name="cell" id="builder-cell" placeholder="A1" required></label>
+          </div>
+          <div class="two-col">
+            <label>Mode
+              <select name="mode" id="builder-mode">
+                <option value="display">Display (read-only)</option>
+                <option value="input">Input (two-way)</option>
+              </select>
+            </label>
+            <label>Input Type
+              <select name="inputType" id="builder-input-type">
+                <option value="text">Text</option>
+                <option value="number">Number</option>
+              </select>
+            </label>
+          </div>
+          <div class="actions">
+            <button type="submit" id="builder-save-component">Save Component</button>
+            <button type="button" id="builder-reset" class="ghost">Clear Selection</button>
+          </div>
+        </form>
+      </div>
+      <div class="actions builder-actions">
+        <button type="button" id="builder-save-layout">Save Layout</button>
+        <button type="button" id="ui-builder-cancel" class="ghost">Close</button>
+      </div>
     </div>
   </div>
 

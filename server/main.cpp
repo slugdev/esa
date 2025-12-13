@@ -885,6 +885,28 @@ std::string load_app_image_base64(const std::string &owner, const std::string &a
     return base64_encode(buffer.str());
 }
 
+fs::path app_ui_path(const std::string &owner, const std::string &app) {
+    return app_root() / owner / app / "ui.json";
+}
+
+bool save_app_ui(const std::string &owner, const std::string &app, const std::string &json) {
+    fs::path path = app_ui_path(owner, app);
+    if (!ensure_dir(path.parent_path())) return false;
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out.is_open()) return false;
+    out << json;
+    return true;
+}
+
+std::string load_app_ui(const std::string &owner, const std::string &app) {
+    fs::path path = app_ui_path(owner, app);
+    std::ifstream in(path, std::ios::binary);
+    if (!in.is_open()) return "";
+    std::ostringstream buffer;
+    buffer << in.rdbuf();
+    return buffer.str();
+}
+
 bool write_metadata(const fs::path &p, const AppInfo &info) {
     std::ofstream out(p / "meta.txt", std::ios::trunc);
     if (!out) return false;
@@ -1059,6 +1081,8 @@ class Server {
         if (req.method == "POST" && req.path == "/excel/query") return handle_excel_query(req);
         if (req.method == "POST" && req.path == "/excel/set") return handle_excel_set(req);
         if (req.method == "POST" && req.path == "/excel/close") return handle_excel_close(req);
+        if (req.method == "POST" && req.path == "/apps/ui/get") return handle_ui_get(req);
+        if (req.method == "POST" && req.path == "/apps/ui/save") return handle_ui_save(req);
         if (req.method == "GET" && req.path == "/apps") return handle_list(req);
         if (req.method == "POST" && req.path == "/apps") return handle_create(req);
         if (req.method == "PUT" && req.path.rfind("/apps/", 0) == 0) return handle_update(req);
@@ -1436,12 +1460,14 @@ class Server {
             if (!first) oss << ",";
             first = false;
             std::string image_data = load_app_image_base64(a.owner, a.name);
+            bool has_ui = fs::exists(app_ui_path(a.owner, a.name));
             oss << "{\"owner\":\"" << json_escape(a.owner) << "\","
                 << "\"name\":\"" << json_escape(a.name) << "\","
                 << "\"latest_version\":" << a.latest_version << ","
                 << "\"description\":\"" << json_escape(a.description) << "\","
                 << "\"public\":" << (a.public_access ? "true" : "false") << ","
                 << "\"access_group\":\"" << json_escape(a.access_group) << "\"," 
+                << "\"has_ui\":" << (has_ui ? "true" : "false") << ","
                 << "\"image_base64\":\"" << json_escape(image_data) << "\"}";
         }
         oss << "]";
@@ -1479,6 +1505,85 @@ class Server {
         fs::remove_all(base, ec);
         db_.remove_app(app.owner, app_name);
         resp.body = "{\"status\":\"deleted\"}";
+        return resp;
+    }
+
+    HttpResponse handle_ui_get(const HttpRequest &req) {
+        HttpResponse resp;
+        if (!require_json(req, resp)) return resp;
+        UserRecord caller;
+        if (!authenticate(req, caller, resp)) return resp;
+        std::string owner = extract_json_string(req.body, "owner");
+        std::string app_name = extract_json_string(req.body, "name");
+        if (owner.empty()) owner = caller.name;
+        if (app_name.empty()) {
+            resp.status = 400;
+            resp.body = "{\"error\":\"missing name\"}";
+            return resp;
+        }
+        if (!is_safe_name(owner) || !is_safe_name(app_name)) {
+            resp.status = 400;
+            resp.body = "{\"error\":\"invalid names\"}";
+            return resp;
+        }
+        AppRecord app;
+        if (!db_.get_app(owner, app_name, app)) {
+            resp.status = 404;
+            resp.body = "{\"error\":\"not found\"}";
+            return resp;
+        }
+        if (!can_access(app, caller) && !is_admin(caller, cfg_)) {
+            resp.status = 403;
+            resp.body = "{\"error\":\"forbidden\"}";
+            return resp;
+        }
+        std::string schema = load_app_ui(owner, app_name);
+        if (schema.empty()) schema = "{\"components\":[]}";
+        resp.body = "{\"owner\":\"" + json_escape(owner) + "\",\"name\":\"" + json_escape(app_name) + "\",\"schema\":" + schema + "}";
+        return resp;
+    }
+
+    HttpResponse handle_ui_save(const HttpRequest &req) {
+        HttpResponse resp;
+        if (!require_json(req, resp)) return resp;
+        UserRecord caller;
+        if (!authenticate(req, caller, resp)) return resp;
+        std::string owner = extract_json_string(req.body, "owner");
+        std::string app_name = extract_json_string(req.body, "name");
+        std::string schema_json = extract_json_string(req.body, "schema_json");
+        if (owner.empty()) owner = caller.name;
+        if (app_name.empty() || schema_json.empty()) {
+            resp.status = 400;
+            resp.body = "{\"error\":\"missing fields\"}";
+            return resp;
+        }
+        if (!is_safe_name(owner) || !is_safe_name(app_name)) {
+            resp.status = 400;
+            resp.body = "{\"error\":\"invalid names\"}";
+            return resp;
+        }
+        if (schema_json.size() > 256 * 1024) {
+            resp.status = 400;
+            resp.body = "{\"error\":\"schema too large\"}";
+            return resp;
+        }
+        AppRecord app;
+        if (!db_.get_app(owner, app_name, app)) {
+            resp.status = 404;
+            resp.body = "{\"error\":\"not found\"}";
+            return resp;
+        }
+        if (app.owner != caller.name && !is_admin(caller, cfg_)) {
+            resp.status = 403;
+            resp.body = "{\"error\":\"forbidden\"}";
+            return resp;
+        }
+        if (!save_app_ui(owner, app_name, schema_json)) {
+            resp.status = 500;
+            resp.body = "{\"error\":\"cannot save schema\"}";
+            return resp;
+        }
+        resp.body = "{\"status\":\"saved\"}";
         return resp;
     }
 
