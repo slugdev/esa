@@ -11,4 +11,4 @@ add_executable(esa main.cpp)
 target_link_libraries(esa PRIVATE ws2_32 ole32 oleaut32)
 
 # Ensure Unicode and Win10 target; adjust as needed.
-target_compile_definitions(server PRIVATE _WIN32_WINNT=0x0A00 UNICODE _UNICODE)
+target_compile_definitions(esa PRIVATE _WIN32_WINNT=0x0A00 UNICODE _UNICODE)

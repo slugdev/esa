@@ -1,5 +1,6 @@
 (() => {
-  const apiBase = window.location.origin; // adjust if server runs elsewhere
+  const urlApi = new URLSearchParams(location.search).get('api');
+  const apiBase = urlApi || (location.origin === 'null' ? 'http://localhost:8080' : window.location.origin); // adjust if server runs elsewhere
   let token = sessionStorage.getItem('esa_token');
   let currentUser = sessionStorage.getItem('esa_user');
   let role = { admin: false, developer: false };

@@ -1,5 +1,6 @@
 (() => {
-  const apiBase = window.location.origin;
+  const urlApi = new URLSearchParams(location.search).get('api');
+  const apiBase = urlApi || (location.origin === 'null' ? 'http://localhost:8080' : window.location.origin);
   const toastEl = document.querySelector('#toast');
   const showToast = (msg, isError = false) => {
     toastEl.textContent = msg;

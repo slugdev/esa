@@ -61,6 +61,16 @@ main.auth {
   grid-template-columns: 1fr;
 }
 
+main.auth form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+main.auth .actions {
+  justify-content: flex-end;
+}
+
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
