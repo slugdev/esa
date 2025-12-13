@@ -362,6 +362,7 @@
       devFormMode.textContent = 'Mode: Create new';
       nameInput.readOnly = false;
       createForm.reset();
+      publicInput.checked = false;
       fileInput.required = true;
     } else if (app) {
       devFormMode.textContent = `Mode: Update ${app.name} (v${app.latest_version})`;

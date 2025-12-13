@@ -1267,7 +1267,7 @@ class Server {
         std::string desc = extract_json_string(req.body, "description");
         std::string file_b64 = extract_json_string(req.body, "file_base64");
         std::string access_group = extract_json_string(req.body, "access_group");
-        bool is_public = extract_json_bool(req.body, "public", access_group.empty());
+        bool is_public = extract_json_bool(req.body, "public", false);
         if (app_name.empty() || file_b64.empty()) {
             resp.status = 400;
             resp.body = "{\"error\":\"missing name or file_base64\"}";
