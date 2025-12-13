@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESA Client</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="brand">
+      <div class="logo">ESA</div>
+      <div class="tagline">Excel Server Application</div>
+    </div>
+    <div class="session">
+      <div id="session-info" class="card inline hidden">
+        <div id="session-user"></div>
+        <div id="session-roles"></div>
+        <button id="logout-btn" type="button">Logout</button>
+      </div>
+      <button id="back-to-login" type="button" class="ghost">Login</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="card" id="apps-panel">
+      <div class="panel-head">
+        <h2>Applications</h2>
+        <button id="refresh-apps" type="button">Refresh</button>
+      </div>
+      <div id="apps-list" class="grid"></div>
+    </section>
+
+    <section class="card" id="create-panel" aria-label="Create application">
+      <div class="panel-head">
+        <h2>Create Application</h2>
+        <span class="pill" id="developer-pill">Developer-only</span>
+      </div>
+      <form id="create-form">
+        <div class="two-col">
+          <label>Name <input name="name" required></label>
+          <label>Access Group <input name="access_group" placeholder="optional"></label>
+        </div>
+        <label>Description <input name="description"></label>
+        <div class="row">
+          <label class="checkbox"><input type="checkbox" name="public" checked> Public</label>
+          <label class="file">
+            <span>Select .xlsx file</span>
+            <input type="file" name="file" accept=".xlsx" required>
+          </label>
+        </div>
+        <div class="actions">
+          <button type="submit">Upload</button>
+          <button type="button" id="developer-override" class="ghost">Force Developer UI</button>
+        </div>
+      </form>
+      <p id="create-hint" class="hint">Visible only when your role is Developer or Admin. If the server does not expose roles, you can force-enable once logged in.</p>
+    </section>
+
+    <section class="card" id="admin-panel" aria-label="Admin actions">
+      <div class="panel-head">
+        <h2>Admin</h2>
+        <span class="pill warning">Admin-only</span>
+      </div>
+      <div id="admin-warning" class="hint">Sign in as an administrator to manage users.</div>
+      <div id="users-area" class="hidden">
+        <h3>Users</h3>
+        <table id="users-table">
+          <thead><tr><th>Name</th><th>Groups</th><th>Role</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <h3>Create / Update User</h3>
+        <form id="user-form">
+          <div class="two-col">
+            <label>Username <input name="username" required></label>
+            <label>Password <input name="password" required></label>
+          </div>
+          <div class="two-col">
+            <label>Groups (comma) <input name="groups" placeholder="team,project"></label>
+            <label>Role
+              <select name="role">
+                <option value="user">User</option>
+                <option value="developer">Developer</option>
+              </select>
+            </label>
+          </div>
+          <div class="actions"><button type="submit">Save User</button></div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js"></script>
+</body>
+</html>

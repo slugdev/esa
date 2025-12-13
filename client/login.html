@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESA Login</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="brand">
+      <div class="logo">ESA</div>
+      <div class="tagline">Excel Server Application</div>
+    </div>
+  </header>
+
+  <main class="auth">
+    <section class="card">
+      <h2>Sign In</h2>
+      <form id="login-form">
+        <label>Username <input name="username" autocomplete="username" required></label>
+        <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+        <div class="actions"><button type="submit">Login</button></div>
+      </form>
+      <p class="hint">Don't have an account? <a href="register.html">Register</a></p>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="login.js"></script>
+</body>
+</html>

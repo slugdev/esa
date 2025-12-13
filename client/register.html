@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register - ESA</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="brand">
+      <div class="logo">ESA</div>
+      <div class="tagline">Excel Server Application</div>
+    </div>
+    <div class="session">
+      <a class="ghost" href="login.html" style="text-decoration:none;padding:10px 12px;border:1px dashed var(--border);border-radius:10px;color:var(--muted);">Back to Login</a>
+    </div>
+  </header>
+
+  <main class="auth">
+    <section class="card">
+      <div class="panel-head">
+        <h2>Create Account</h2>
+        <span class="pill">User role</span>
+      </div>
+      <form id="signup-form">
+        <label>Username <input name="username" autocomplete="username" required></label>
+        <label>Password <input name="password" type="password" autocomplete="new-password" required></label>
+        <label>Groups (comma separated) <input name="groups" placeholder="team,project"></label>
+        <div class="actions"><button type="submit">Create Account</button></div>
+      </form>
+      <p class="hint">Account creation calls the server's /users endpoint and may require admin permission. After creation, return to login.</p>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="register.js"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+# Build outputs
+/server/build/
+/server/x64/
+/server/Debug/
+/server/Release/
+/server/*.sdf
+/server/*.opensdf
+/server/*.vcxproj.user
+/server/*.sln
+/server/.vs/
+
+# CMake cache and generated files
+/server/CMakeFiles/
+/server/CMakeCache.txt
+/server/cmake_install.cmake
+/server/Makefile
+
+# Binaries and logs
+/server/*.exe
+/server/*.ilk
+/server/*.pdb
+/server/*.log
+
+# Database and uploads
+/server/db.bin
+/app/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+*.lock
+
+# Node/npm (if used later)
+node_modules/
