@@ -173,14 +173,3 @@ The MIT License allows you to:
 
 The only requirement is to include the original copyright notice in all copies or substantial portions of the software.
 
-## Contributing
-
-[Add contribution guidelines here]
-
-## Support
-
-For issues, questions, or feature requests, please [add contact information or issue tracker link].
-
----
-
-**Built with modern web technologies and Excel integration for powerful business applications**

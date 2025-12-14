@@ -136,58 +136,75 @@
     </div>
   </div>
 
-  <div id="ui-builder-modal" class="modal hidden" aria-hidden="true">
-    <div class="modal-dialog modal-lg" role="dialog" aria-modal="true" aria-labelledby="ui-builder-title">
-      <div class="modal-head">
-        <h3 id="ui-builder-title">Application UI Builder</h3>
-        <button type="button" id="ui-builder-close" class="ghost icon-btn" aria-label="Close dialog">&#10005;</button>
+  <div id="ui-builder-modal" class="app-overlay hidden" aria-hidden="true">
+    <div class="app-overlay-content">
+      <div class="app-overlay-header">
+        <div>
+          <h3 id="ui-builder-title">UI Builder</h3>
+          <span id="builder-app-label" class="pill" style="margin-left: 12px;">No app</span>
+        </div>
+        <button type="button" id="ui-builder-close" class="ghost">Close Builder</button>
       </div>
-      <p class="hint">Map Excel cell references to fields and displays. Save to publish your experience.</p>
-      <div class="builder-shell">
-        <div class="builder-list">
-          <div class="builder-list-head">
+      <div class="app-overlay-body" style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 18px;">
+        <div class="builder-panel">
+          <div class="builder-panel-head">
             <h4>Components</h4>
-            <span id="builder-app-label" class="pill">No app</span>
+            <span class="hint" style="margin: 0;">{{ builderComponents.length }} items</span>
           </div>
           <div id="builder-components" class="builder-components"></div>
           <div id="builder-empty" class="hint">No components yet. Add one using the form.</div>
         </div>
-        <form id="builder-form" class="builder-form">
-          <input type="hidden" name="component_id" id="builder-component-id">
-          <label>Label
-            <input name="label" id="builder-label" required>
-          </label>
-          <div class="two-col">
-            <label>Sheet
-              <select name="sheet" id="builder-sheet" required>
-                <option value="">Loading sheets…</option>
-              </select>
+        <div class="builder-panel">
+          <h4 class="builder-panel-head">Component Editor</h4>
+          <form id="builder-form" class="builder-form">
+            <input type="hidden" name="component_id" id="builder-component-id">
+            <label>Label
+              <input name="label" id="builder-label" required>
             </label>
-            <label>Cell / Range <input name="cell" id="builder-cell" placeholder="A1" required></label>
-          </div>
-          <div class="two-col">
-            <label>Mode
-              <select name="mode" id="builder-mode">
+            <div class="two-col">
+              <label>Sheet
+                <select name="sheet" id="builder-sheet" required>
+                  <option value="">Loading sheets…</option>
+                </select>
+              </label>
+              <label>Cell / Range <input name="cell" id="builder-cell" placeholder="A1" required></label>
+            </div>
+            <label>Component Type
+              <select name="componentType" id="builder-component-type">
+                <option value="text">Text Input</option>
+                <option value="number">Number Input</option>
+                <option value="textarea">Text Area</option>
+                <option value="dropdown">Dropdown</option>
+                <option value="slider">Slider</option>
+                <option value="checkbox">Checkbox</option>
                 <option value="display">Display (read-only)</option>
-                <option value="input">Input (two-way)</option>
               </select>
             </label>
-            <label>Input Type
-              <select name="inputType" id="builder-input-type">
-                <option value="text">Text</option>
-                <option value="number">Number</option>
-              </select>
-            </label>
-          </div>
-          <div class="actions">
-            <button type="submit" id="builder-save-component">Save Component</button>
-            <button type="button" id="builder-reset" class="ghost">Clear Selection</button>
-          </div>
-        </form>
+            <div id="builder-options-section" class="hidden">
+              <label>Options (comma-separated)
+                <input name="options" id="builder-options" placeholder="Option1, Option2, Option3">
+                <span class="hint">For dropdowns: enter comma-separated values</span>
+              </label>
+            </div>
+            <div id="builder-range-section" class="hidden">
+              <div class="two-col">
+                <label>Min Value <input type="number" name="min" id="builder-min" value="0"></label>
+                <label>Max Value <input type="number" name="max" id="builder-max" value="100"></label>
+              </div>
+              <label>Step <input type="number" name="step" id="builder-step" value="1"></label>
+            </div>
+            <div class="actions">
+              <button type="submit" id="builder-save-component">Save Component</button>
+              <button type="button" id="builder-reset" class="ghost">Clear Selection</button>
+            </div>
+          </form>
+        </div>
       </div>
-      <div class="actions builder-actions">
-        <button type="button" id="builder-save-layout">Save Layout</button>
-        <button type="button" id="ui-builder-cancel" class="ghost">Close</button>
+      <div class="app-overlay-footer">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div class="hint" style="margin: 0;">Configure components and map them to Excel cells. Click "Save Layout" when done.</div>
+          <button type="button" id="builder-save-layout">Save Layout</button>
+        </div>
       </div>
     </div>
   </div>

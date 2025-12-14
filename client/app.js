@@ -80,8 +80,13 @@
   const builderLabelInput = qs('#builder-label');
   const builderSheetSelect = qs('#builder-sheet');
   const builderCellInput = qs('#builder-cell');
-  const builderModeSelect = qs('#builder-mode');
-  const builderInputTypeSelect = qs('#builder-input-type');
+  const builderComponentTypeSelect = qs('#builder-component-type');
+  const builderOptionsInput = qs('#builder-options');
+  const builderMinInput = qs('#builder-min');
+  const builderMaxInput = qs('#builder-max');
+  const builderStepInput = qs('#builder-step');
+  const builderOptionsSection = qs('#builder-options-section');
+  const builderRangeSection = qs('#builder-range-section');
   const builderComponentIdInput = qs('#builder-component-id');
   const builderResetBtn = qs('#builder-reset');
   const builderAppLabel = qs('#builder-app-label');
@@ -212,7 +217,6 @@
   appExitBtn?.addEventListener('click', () => exitActiveApp());
 
   if (builderClose) builderClose.addEventListener('click', () => closeBuilderModal());
-  if (builderCancel) builderCancel.addEventListener('click', () => closeBuilderModal());
   if (builderModal) {
     builderModal.addEventListener('click', (e) => {
       if (e.target === builderModal) closeBuilderModal();
@@ -227,6 +231,7 @@
   }
   builderResetBtn?.addEventListener('click', () => setBuilderEditing(null));
   builderForm?.addEventListener('submit', handleBuilderFormSubmit);
+  builderComponentTypeSelect?.addEventListener('change', handleComponentTypeChange);
   builderComponentsEl?.addEventListener('click', handleBuilderListClick);
   builderSaveLayoutBtn?.addEventListener('click', () => saveBuilderLayout());
   appUiForm?.addEventListener('change', handleAppFormChange);
@@ -395,10 +400,17 @@
   function updateComponentDisplay(id, value) {
     const el = appUiForm?.querySelector(`[data-component="${id}"]`);
     if (!el) return;
-    if (el.tagName === 'INPUT') {
-      el.value = value ?? '';
-    } else {
+    
+    if (el.tagName === 'OUTPUT') {
       el.textContent = formatValue(value);
+    } else if (el.type === 'checkbox') {
+      el.checked = value === 'TRUE' || value === true || value === 1;
+    } else if (el.type === 'range') {
+      el.value = value ?? '';
+      const valueSpan = appUiForm?.querySelector(`[data-value-for="${id}"]`);
+      if (valueSpan) valueSpan.textContent = value ?? '—';
+    } else {
+      el.value = value ?? '';
     }
   }
 
@@ -426,36 +438,81 @@
     appUiEmpty.classList.add('hidden');
     appUiForm.classList.remove('hidden');
     appUiForm.innerHTML = components.map(comp => {
-      const mode = comp.mode || 'display';
-      const inputType = comp.inputType || 'text';
-      if (mode === 'input') {
-        return `<div class="app-ui-field"><label>${escapeHtml(comp.label || comp.cell || 'Input')}</label><input data-component="${comp.id}" type="${escapeHtml(inputType)}" placeholder="${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')}" /></div>`;
+      const type = comp.componentType || 'text';
+      const label = escapeHtml(comp.label || comp.cell || 'Field');
+      const cellRef = `${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')}`;
+      
+      if (type === 'display') {
+        return `<div class="app-ui-field"><label>${label}</label><output data-component="${comp.id}">—</output><div class="app-meta">${cellRef}</div></div>`;
       }
-      return `<div class="app-ui-field"><label>${escapeHtml(comp.label || comp.cell || 'Value')}</label><output data-component="${comp.id}">—</output><div class="app-meta">${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')}</div></div>`;
+      
+      if (type === 'textarea') {
+        return `<div class="app-ui-field"><label>${label}</label><textarea data-component="${comp.id}" rows="4" placeholder="${cellRef}"></textarea></div>`;
+      }
+      
+      if (type === 'dropdown') {
+        const options = (comp.options || '').split(',').map(o => o.trim()).filter(Boolean);
+        const optionsHtml = options.map(opt => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join('');
+        return `<div class="app-ui-field"><label>${label}</label><select data-component="${comp.id}"><option value="">Select...</option>${optionsHtml}</select></div>`;
+      }
+      
+      if (type === 'slider') {
+        const min = comp.min ?? 0;
+        const max = comp.max ?? 100;
+        const step = comp.step ?? 1;
+        return `<div class="app-ui-field"><label>${label} <span class="slider-value" data-value-for="${comp.id}">—</span></label><input type="range" data-component="${comp.id}" min="${min}" max="${max}" step="${step}" /><div class="app-meta">${cellRef}</div></div>`;
+      }
+      
+      if (type === 'checkbox') {
+        return `<div class="app-ui-field checkbox"><label><input type="checkbox" data-component="${comp.id}" /> ${label}</label><div class="app-meta">${cellRef}</div></div>`;
+      }
+      
+      if (type === 'number') {
+        return `<div class="app-ui-field"><label>${label}</label><input data-component="${comp.id}" type="number" placeholder="${cellRef}" /></div>`;
+      }
+      
+      return `<div class="app-ui-field"><label>${label}</label><input data-component="${comp.id}" type="text" placeholder="${cellRef}" /></div>`;
     }).join('');
   }
 
   function handleAppFormChange(e) {
-    const input = e.target.closest('input[data-component]');
-    if (!input) return;
-    const id = input.dataset.component;
+    const el = e.target.closest('[data-component]');
+    if (!el) return;
+    const id = el.dataset.component;
     const component = activeComponents.find(c => c.id === id);
-    if (!component || (component.mode || 'display') !== 'input') return;
-    commitComponentValue(component, input.value);
+    if (!component || component.componentType === 'display') return;
+    
+    let value;
+    if (el.type === 'checkbox') {
+      value = el.checked ? 'TRUE' : 'FALSE';
+    } else if (el.type === 'range') {
+      value = el.value;
+      const valueSpan = appUiForm?.querySelector(`[data-value-for="${id}"]`);
+      if (valueSpan) valueSpan.textContent = value;
+    } else {
+      value = el.value;
+    }
+    
+    commitComponentValue(component, value);
   }
 
   async function commitComponentValue(component, rawValue) {
     if (!component?.sheet || !component?.cell) return;
     const payload = { sheet: component.sheet, range: component.cell };
-    if ((component.inputType || 'text') === 'number') {
+    const type = component.componentType || 'text';
+    
+    if (type === 'number' || type === 'slider') {
       const trimmed = (rawValue ?? '').trim();
       if (trimmed === '') return showToast('Enter a number', true);
       const num = Number(trimmed);
       if (!Number.isFinite(num)) return showToast('Enter a valid number', true);
       payload.value_number = num;
+    } else if (type === 'checkbox') {
+      payload.value = rawValue;
     } else {
       payload.value = rawValue ?? '';
     }
+    
     try {
       const res = await apiFetch(`${apiBase}/excel/set`, {
         method: 'POST',
@@ -554,7 +611,8 @@
     }
     builderEmpty?.classList.add('hidden');
     builderComponentsEl.innerHTML = builderComponents.map(comp => {
-      const meta = `${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')} • ${(comp.mode || 'display') === 'input' ? 'Input' : 'Display'}`;
+      const typeLabel = getComponentTypeLabel(comp.componentType || 'text');
+      const meta = `${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')} • ${typeLabel}`;
       return `<div class="builder-row"><div><h5>${escapeHtml(comp.label || comp.cell || 'Component')}</h5><div class="app-meta">${meta}</div></div><div class="actions"><button type="button" class="ghost" data-edit-component="${comp.id}">Edit</button><button type="button" class="ghost" data-remove-component="${comp.id}">Remove</button></div></div>`;
     }).join('');
   }
@@ -599,14 +657,38 @@
     }
   }
 
+  function handleComponentTypeChange(e) {
+    const type = e.target.value;
+    if (builderOptionsSection) {
+      builderOptionsSection.classList.toggle('hidden', type !== 'dropdown');
+    }
+    if (builderRangeSection) {
+      builderRangeSection.classList.toggle('hidden', type !== 'slider');
+    }
+  }
+
+  function getComponentTypeLabel(type) {
+    const labels = {
+      text: 'Text Input',
+      number: 'Number Input',
+      textarea: 'Text Area',
+      dropdown: 'Dropdown',
+      slider: 'Slider',
+      checkbox: 'Checkbox',
+      display: 'Display'
+    };
+    return labels[type] || 'Text Input';
+  }
+
   function setBuilderEditing(id) {
     if (!builderForm) return;
     if (!id) {
       builderComponentIdInput.value = '';
       builderForm.reset();
-      builderModeSelect.value = 'display';
-      builderInputTypeSelect.value = 'text';
+      if (builderComponentTypeSelect) builderComponentTypeSelect.value = 'text';
       if (builderSheetSelect) builderSheetSelect.value = builderSheets[0] || '';
+      if (builderOptionsSection) builderOptionsSection.classList.add('hidden');
+      if (builderRangeSection) builderRangeSection.classList.add('hidden');
       return;
     }
     const comp = builderComponents.find(c => c.id === id);
@@ -616,8 +698,14 @@
     ensureSheetOption(comp.sheet || '');
     if (builderSheetSelect) builderSheetSelect.value = comp.sheet || builderSheets[0] || '';
     builderCellInput.value = comp.cell || '';
-    builderModeSelect.value = comp.mode || 'display';
-    builderInputTypeSelect.value = comp.inputType || 'text';
+    const componentType = comp.componentType || 'text';
+    if (builderComponentTypeSelect) builderComponentTypeSelect.value = componentType;
+    if (builderOptionsInput) builderOptionsInput.value = comp.options || '';
+    if (builderMinInput) builderMinInput.value = comp.min ?? 0;
+    if (builderMaxInput) builderMaxInput.value = comp.max ?? 100;
+    if (builderStepInput) builderStepInput.value = comp.step ?? 1;
+    if (builderOptionsSection) builderOptionsSection.classList.toggle('hidden', componentType !== 'dropdown');
+    if (builderRangeSection) builderRangeSection.classList.toggle('hidden', componentType !== 'slider');
   }
 
   function handleBuilderFormSubmit(e) {
@@ -628,10 +716,17 @@
     if (!sheet) return showToast('Select a sheet', true);
     const cell = builderCellInput.value.trim();
     if (!cell) return showToast('Cell / range is required', true);
-    const mode = builderModeSelect.value || 'display';
-    const inputType = builderInputTypeSelect.value || 'text';
+    const componentType = builderComponentTypeSelect?.value || 'text';
     const id = builderComponentIdInput.value || createComponentId();
-    const next = { id, label, sheet, cell, mode, inputType };
+    const next = { id, label, sheet, cell, componentType };
+    if (componentType === 'dropdown') {
+      next.options = builderOptionsInput?.value || '';
+    }
+    if (componentType === 'slider') {
+      next.min = Number(builderMinInput?.value ?? 0);
+      next.max = Number(builderMaxInput?.value ?? 100);
+      next.step = Number(builderStepInput?.value ?? 1);
+    }
     const idx = builderComponents.findIndex(c => c.id === id);
     if (idx >= 0) builderComponents[idx] = next; else builderComponents.push(next);
     setBuilderEditing(null);
