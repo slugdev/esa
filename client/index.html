@@ -148,19 +148,51 @@
       <div class="app-overlay-body" style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 18px;">
         <div class="builder-panel">
           <div class="builder-panel-head">
-            <h4>Components</h4>
-            <span class="hint" style="margin: 0;">{{ builderComponents.length }} items</span>
+            <h4>Application Tree</h4>
+            <button type="button" id="builder-add-tab" class="btn-small">+ Add Tab</button>
           </div>
-          <div id="builder-components" class="builder-components"></div>
-          <div id="builder-empty" class="hint">No components yet. Add one using the form.</div>
+          <div class="builder-tree">
+            <div class="tree-root">
+              <div class="tree-node tree-root-node">
+                <span class="tree-icon">📋</span>
+                <span id="builder-tree-app-name">Application</span>
+              </div>
+              <div class="tree-children" style="margin-left: 20px;">
+                <div class="tree-node tree-section-node">
+                  <span class="tree-icon">📊</span>
+                  <span>UI</span>
+                </div>
+                <div id="builder-tabs-tree" class="tree-children" style="margin-left: 40px;"></div>
+              </div>
+            </div>
+          </div>
+          <div id="builder-empty" class="hint">No tabs yet. Add a tab to start building your UI.</div>
         </div>
         <div class="builder-panel">
-          <h4 class="builder-panel-head">Component Editor</h4>
-          <form id="builder-form" class="builder-form">
-            <input type="hidden" name="component_id" id="builder-component-id">
-            <label>Label
-              <input name="label" id="builder-label" required>
-            </label>
+          <h4 class="builder-panel-head">Editor</h4>
+          <div id="builder-tab-editor" class="hidden">
+            <form id="builder-tab-form" class="builder-form">
+              <input type="hidden" id="builder-tab-id">
+              <label>Tab Name
+                <input id="builder-tab-name" required placeholder="e.g., Dashboard, Settings">
+              </label>
+              <div class="actions">
+                <button type="submit">Save Tab</button>
+                <button type="button" id="builder-tab-cancel" class="ghost">Cancel</button>
+              </div>
+            </form>
+          </div>
+          <div id="builder-component-editor" class="hidden">
+            <form id="builder-form" class="builder-form">
+              <input type="hidden" name="component_id" id="builder-component-id">
+              <label>Tab
+                <select id="builder-component-tab" required>
+                  <option value="">Select a tab...</option>
+                </select>
+              </label>
+              <label>Label
+                <input name="label" id="builder-label" required>
+              </label>
             <div class="two-col">
               <label>Sheet
                 <select name="sheet" id="builder-sheet" required>

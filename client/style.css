@@ -364,8 +364,143 @@ input[type="file"] { padding: 8px; }
   .builder-shell { grid-template-columns: 1fr; }
 }
 
+/* Tree Structure */
+.tree-node {
+  margin-left: 0;
+  padding: 4px 0;
+}
+
+.tree-node-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.tree-node-header:hover {
+  background: rgba(90, 179, 255, 0.08);
+}
+
+.tree-icon {
+  font-size: 14px;
+  width: 16px;
+  text-align: center;
+}
+
+.tree-label {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tree-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  opacity: 0;
+  transition: all 0.2s;
+}
+
+.tree-node-header:hover .tree-btn {
+  opacity: 1;
+}
+
+.tree-btn:hover {
+  background: rgba(90, 179, 255, 0.15);
+  color: var(--accent);
+}
+
+.tree-children {
+  margin-left: 20px;
+  border-left: 1px solid rgba(90, 179, 255, 0.12);
+  padding-left: 8px;
+}
+
+.tree-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px dashed rgba(90, 179, 255, 0.3);
+  color: var(--accent);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: all 0.2s;
+}
+
+.tree-add-btn:hover {
+  background: rgba(90, 179, 255, 0.08);
+  border-style: solid;
+}
+
+/* Runtime Tab Interface */
+.app-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 20px;
+  padding-bottom: 0;
+}
+
+.app-tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 10px 18px;
+  border-radius: 8px 8px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.app-tab-btn:hover {
+  background: rgba(90, 179, 255, 0.08);
+  color: var(--text);
+}
+
+.app-tab-btn.active {
+  background: rgba(90, 179, 255, 0.12);
+  color: var(--accent-strong);
+}
+
+.app-tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+.app-tab-content {
+  position: relative;
+}
+
+.app-tab-panel {
+  display: none;
+}
+
+.app-tab-panel.active {
+  display: block;
+}
+
 @media (max-width: 640px) {
   header.hero { flex-direction: column; align-items: flex-start; gap: 12px; }
   .inline { width: 100%; }
   .session { width: 100%; flex-direction: column; align-items: stretch; }
+  .app-tabs { flex-wrap: wrap; }
+  .app-tab-btn { padding: 8px 12px; font-size: 13px; }
 }

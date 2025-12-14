@@ -11,6 +11,7 @@
   let activeComponents = [];
   let workbookApp = null;
   let builderTarget = null;
+  let builderTabs = [];
   let builderComponents = [];
   let builderSheets = [];
   const qs = (sel) => document.querySelector(sel);
@@ -74,8 +75,18 @@
   const builderModal = qs('#ui-builder-modal');
   const builderClose = qs('#ui-builder-close');
   const builderCancel = qs('#ui-builder-cancel');
-  const builderComponentsEl = qs('#builder-components');
+  const builderComponentsEl = qs('#builder-tabs-tree');
   const builderEmpty = qs('#builder-empty');
+  const builderAddTabBtn = qs('#builder-add-tab');
+  const builderTabEditor = qs('#builder-tab-editor');
+  const builderComponentEditor = qs('#builder-component-editor');
+  const builderDefaultMessage = qs('#builder-default-message');
+  const builderTabForm = qs('#builder-tab-form');
+  const builderTabIdInput = qs('#builder-tab-id');
+  const builderTabNameInput = qs('#builder-tab-name');
+  const builderTabCancelBtn = qs('#builder-tab-cancel');
+  const builderComponentTabSelect = qs('#builder-component-tab');
+  const builderTreeAppName = qs('#builder-tree-app-name');
   const builderForm = qs('#builder-form');
   const builderLabelInput = qs('#builder-label');
   const builderSheetSelect = qs('#builder-sheet');
@@ -229,10 +240,13 @@
       if (e.target === previewModal) closePreviewModal();
     });
   }
-  builderResetBtn?.addEventListener('click', () => setBuilderEditing(null));
+  builderResetBtn?.addEventListener('click', () => cancelComponentEdit());
   builderForm?.addEventListener('submit', handleBuilderFormSubmit);
   builderComponentTypeSelect?.addEventListener('change', handleComponentTypeChange);
-  builderComponentsEl?.addEventListener('click', handleBuilderListClick);
+  builderComponentsEl?.addEventListener('click', handleBuilderTreeClick);
+  builderAddTabBtn?.addEventListener('click', () => showTabEditor(null));
+  builderTabForm?.addEventListener('submit', handleTabFormSubmit);
+  builderTabCancelBtn?.addEventListener('click', () => hideAllEditors());
   builderSaveLayoutBtn?.addEventListener('click', () => saveBuilderLayout());
   appUiForm?.addEventListener('change', handleAppFormChange);
   appUiForm?.addEventListener('submit', (e) => e.preventDefault());
@@ -426,7 +440,62 @@
   }
 
   function renderAppUi(schema) {
-    const components = normalizeComponents(schema?.components);
+    const tabs = schema?.tabs || [];
+    const legacyComponents = schema?.components;
+    
+    // Handle legacy format (no tabs)
+    if (legacyComponents && legacyComponents.length > 0 && tabs.length === 0) {
+      const components = normalizeComponents(legacyComponents);
+      activeComponents = components;
+      renderLegacyAppUi(components);
+      return;
+    }
+    
+    // Handle new tab format
+    if (!appUiForm || !appUiEmpty) return;
+    if (!tabs.length) {
+      appUiForm.classList.add('hidden');
+      appUiEmpty.classList.remove('hidden');
+      appUiForm.innerHTML = '';
+      activeComponents = [];
+      return;
+    }
+    
+    appUiEmpty.classList.add('hidden');
+    appUiForm.classList.remove('hidden');
+    
+    // Flatten all components from all tabs for refresh purposes
+    activeComponents = tabs.flatMap(tab => normalizeComponents(tab.components || []));
+    
+    // Create tab interface
+    const tabsHtml = tabs.map((tab, idx) => {
+      const tabId = `app-tab-${idx}`;
+      return `<button type="button" class="app-tab-btn${idx === 0 ? ' active' : ''}" data-tab-target="${tabId}">${escapeHtml(tab.name)}</button>`;
+    }).join('');
+    
+    const tabPanelsHtml = tabs.map((tab, idx) => {
+      const tabId = `app-tab-${idx}`;
+      const components = normalizeComponents(tab.components || []);
+      const componentsHtml = components.map(comp => renderComponent(comp)).join('');
+      return `<div class="app-tab-panel${idx === 0 ? ' active' : ''}" data-tab-id="${tabId}">${componentsHtml}</div>`;
+    }).join('');
+    
+    appUiForm.innerHTML = `<div class="app-tabs">${tabsHtml}</div><div class="app-tab-content">${tabPanelsHtml}</div>`;
+    
+    // Add tab switching logic
+    appUiForm.querySelectorAll('.app-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.tabTarget;
+        appUiForm.querySelectorAll('.app-tab-btn').forEach(b => b.classList.remove('active'));
+        appUiForm.querySelectorAll('.app-tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        const panel = appUiForm.querySelector(`[data-tab-id="${target}"]`);
+        if (panel) panel.classList.add('active');
+      });
+    });
+  }
+
+  function renderLegacyAppUi(components) {
     activeComponents = components;
     if (!appUiForm || !appUiEmpty) return;
     if (!components.length) {
@@ -437,42 +506,44 @@
     }
     appUiEmpty.classList.add('hidden');
     appUiForm.classList.remove('hidden');
-    appUiForm.innerHTML = components.map(comp => {
-      const type = comp.componentType || 'text';
-      const label = escapeHtml(comp.label || comp.cell || 'Field');
-      const cellRef = `${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')}`;
-      
-      if (type === 'display') {
-        return `<div class="app-ui-field"><label>${label}</label><output data-component="${comp.id}">—</output><div class="app-meta">${cellRef}</div></div>`;
-      }
-      
-      if (type === 'textarea') {
-        return `<div class="app-ui-field"><label>${label}</label><textarea data-component="${comp.id}" rows="4" placeholder="${cellRef}"></textarea></div>`;
-      }
-      
-      if (type === 'dropdown') {
-        const options = (comp.options || '').split(',').map(o => o.trim()).filter(Boolean);
-        const optionsHtml = options.map(opt => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join('');
-        return `<div class="app-ui-field"><label>${label}</label><select data-component="${comp.id}"><option value="">Select...</option>${optionsHtml}</select></div>`;
-      }
-      
-      if (type === 'slider') {
-        const min = comp.min ?? 0;
-        const max = comp.max ?? 100;
-        const step = comp.step ?? 1;
-        return `<div class="app-ui-field"><label>${label} <span class="slider-value" data-value-for="${comp.id}">—</span></label><input type="range" data-component="${comp.id}" min="${min}" max="${max}" step="${step}" /><div class="app-meta">${cellRef}</div></div>`;
-      }
-      
-      if (type === 'checkbox') {
-        return `<div class="app-ui-field checkbox"><label><input type="checkbox" data-component="${comp.id}" /> ${label}</label><div class="app-meta">${cellRef}</div></div>`;
-      }
-      
-      if (type === 'number') {
-        return `<div class="app-ui-field"><label>${label}</label><input data-component="${comp.id}" type="number" placeholder="${cellRef}" /></div>`;
-      }
-      
-      return `<div class="app-ui-field"><label>${label}</label><input data-component="${comp.id}" type="text" placeholder="${cellRef}" /></div>`;
-    }).join('');
+    appUiForm.innerHTML = components.map(comp => renderComponent(comp)).join('');
+  }
+
+  function renderComponent(comp) {
+    const type = comp.componentType || 'text';
+    const label = escapeHtml(comp.label || comp.cell || 'Field');
+    const cellRef = `${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')}`;
+    
+    if (type === 'display') {
+      return `<div class="app-ui-field"><label>${label}</label><output data-component="${comp.id}">—</output><div class="app-meta">${cellRef}</div></div>`;
+    }
+    
+    if (type === 'textarea') {
+      return `<div class="app-ui-field"><label>${label}</label><textarea data-component="${comp.id}" rows="4" placeholder="${cellRef}"></textarea></div>`;
+    }
+    
+    if (type === 'dropdown') {
+      const options = (comp.options || '').split(',').map(o => o.trim()).filter(Boolean);
+      const optionsHtml = options.map(opt => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join('');
+      return `<div class="app-ui-field"><label>${label}</label><select data-component="${comp.id}"><option value="">Select...</option>${optionsHtml}</select></div>`;
+    }
+    
+    if (type === 'slider') {
+      const min = comp.min ?? 0;
+      const max = comp.max ?? 100;
+      const step = comp.step ?? 1;
+      return `<div class="app-ui-field"><label>${label} <span class="slider-value" data-value-for="${comp.id}">—</span></label><input type="range" data-component="${comp.id}" min="${min}" max="${max}" step="${step}" /><div class="app-meta">${cellRef}</div></div>`;
+    }
+    
+    if (type === 'checkbox') {
+      return `<div class="app-ui-field checkbox"><label><input type="checkbox" data-component="${comp.id}" /> ${label}</label><div class="app-meta">${cellRef}</div></div>`;
+    }
+    
+    if (type === 'number') {
+      return `<div class="app-ui-field"><label>${label}</label><input data-component="${comp.id}" type="number" placeholder="${cellRef}" /></div>`;
+    }
+    
+    return `<div class="app-ui-field"><label>${label}</label><input data-component="${comp.id}" type="text" placeholder="${cellRef}" /></div>`;
   }
 
   function handleAppFormChange(e) {
@@ -591,29 +662,75 @@
         fetchWorkbookSheets(owner, name)
       ]);
       builderTarget = { owner, name };
-      builderComponents = normalizeComponents(schema?.components);
+      const components = normalizeComponents(schema?.components);
+      const tabs = schema?.tabs || [];
+      
+      // Migrate old format to new tab-based format if needed
+      if (components.length > 0 && tabs.length === 0) {
+        builderTabs = [{ id: createComponentId(), name: 'Main', components: components }];
+      } else {
+        builderTabs = tabs.map(tab => ({
+          ...tab,
+          id: tab.id || createComponentId(),
+          components: normalizeComponents(tab.components || [])
+        }));
+      }
+      builderComponents = [];
+      
       setSheetOptions(sheets);
       if (builderAppLabel) builderAppLabel.textContent = `${owner}/${name}`;
-      setBuilderEditing(null);
-      renderBuilderComponents();
+      if (builderTreeAppName) builderTreeAppName.textContent = name;
+      hideAllEditors();
+      renderBuilderTree();
       openBuilderModal();
     } catch (err) {
       showToast(err.message || 'Unable to load builder', true);
     }
   }
 
-  function renderBuilderComponents() {
+  function renderBuilderTree() {
     if (!builderComponentsEl) return;
-    if (!builderComponents.length) {
+    
+    if (!builderTabs.length) {
       builderComponentsEl.innerHTML = '';
       builderEmpty?.classList.remove('hidden');
       return;
     }
+    
     builderEmpty?.classList.add('hidden');
-    builderComponentsEl.innerHTML = builderComponents.map(comp => {
-      const typeLabel = getComponentTypeLabel(comp.componentType || 'text');
-      const meta = `${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')} • ${typeLabel}`;
-      return `<div class="builder-row"><div><h5>${escapeHtml(comp.label || comp.cell || 'Component')}</h5><div class="app-meta">${meta}</div></div><div class="actions"><button type="button" class="ghost" data-edit-component="${comp.id}">Edit</button><button type="button" class="ghost" data-remove-component="${comp.id}">Remove</button></div></div>`;
+    builderComponentsEl.innerHTML = builderTabs.map(tab => {
+      const componentCount = tab.components?.length || 0;
+      const componentsHtml = (tab.components || []).map(comp => {
+        const typeLabel = getComponentTypeLabel(comp.componentType || 'text');
+        const meta = `${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')} • ${typeLabel}`;
+        return `<div class="tree-node tree-component-node" data-component-id="${comp.id}" data-tab-id="${tab.id}">
+          <span class="tree-icon">•</span>
+          <div class="tree-node-content">
+            <div class="tree-node-label">${escapeHtml(comp.label || comp.cell || 'Component')}</div>
+            <div class="tree-node-meta">${meta}</div>
+          </div>
+          <div class="tree-node-actions">
+            <button type="button" class="tree-btn" data-edit-component="${comp.id}" data-tab-id="${tab.id}" title="Edit">✏️</button>
+            <button type="button" class="tree-btn" data-remove-component="${comp.id}" data-tab-id="${tab.id}" title="Remove">❌</button>
+          </div>
+        </div>`;
+      }).join('');
+      
+      return `<div class="tree-tab-group">
+        <div class="tree-node tree-tab-node" data-tab-id="${tab.id}">
+          <span class="tree-icon">📑</span>
+          <div class="tree-node-content">
+            <div class="tree-node-label">${escapeHtml(tab.name)}</div>
+            <div class="tree-node-meta">${componentCount} component${componentCount !== 1 ? 's' : ''}</div>
+          </div>
+          <div class="tree-node-actions">
+            <button type="button" class="tree-btn" data-add-component="${tab.id}" title="Add Component">+</button>
+            <button type="button" class="tree-btn" data-edit-tab="${tab.id}" title="Edit Tab">✏️</button>
+            <button type="button" class="tree-btn" data-remove-tab="${tab.id}" title="Remove Tab">❌</button>
+          </div>
+        </div>
+        <div class="tree-children" style="margin-left: 20px;">${componentsHtml}</div>
+      </div>`;
     }).join('');
   }
 
@@ -711,6 +828,10 @@
   function handleBuilderFormSubmit(e) {
     e.preventDefault();
     if (!builderTarget) return showToast('Select an app to design', true);
+    
+    const tabId = builderComponentTabSelect?.value;
+    if (!tabId) return showToast('Select a tab', true);
+    
     const label = builderLabelInput.value.trim() || 'Untitled field';
     const sheet = (builderSheetSelect?.value || '').trim();
     if (!sheet) return showToast('Select a sheet', true);
@@ -718,6 +839,7 @@
     if (!cell) return showToast('Cell / range is required', true);
     const componentType = builderComponentTypeSelect?.value || 'text';
     const id = builderComponentIdInput.value || createComponentId();
+    
     const next = { id, label, sheet, cell, componentType };
     if (componentType === 'dropdown') {
       next.options = builderOptionsInput?.value || '';
@@ -727,29 +849,156 @@
       next.max = Number(builderMaxInput?.value ?? 100);
       next.step = Number(builderStepInput?.value ?? 1);
     }
-    const idx = builderComponents.findIndex(c => c.id === id);
-    if (idx >= 0) builderComponents[idx] = next; else builderComponents.push(next);
-    setBuilderEditing(null);
-    renderBuilderComponents();
+    
+    const tab = builderTabs.find(t => t.id === tabId);
+    if (!tab) return showToast('Tab not found', true);
+    
+    const idx = tab.components.findIndex(c => c.id === id);
+    if (idx >= 0) {
+      tab.components[idx] = next;
+    } else {
+      tab.components.push(next);
+    }
+    
+    hideAllEditors();
+    renderBuilderTree();
   }
 
-  function handleBuilderListClick(e) {
-    const editBtn = e.target.closest('[data-edit-component]');
-    if (editBtn) {
-      setBuilderEditing(editBtn.dataset.editComponent);
+  function handleBuilderTreeClick(e) {
+    const addComponentBtn = e.target.closest('[data-add-component]');
+    if (addComponentBtn) {
+      const tabId = addComponentBtn.dataset.addComponent;
+      showComponentEditor(null, tabId);
       return;
     }
+    
+    const editTabBtn = e.target.closest('[data-edit-tab]');
+    if (editTabBtn) {
+      const tabId = editTabBtn.dataset.editTab;
+      showTabEditor(tabId);
+      return;
+    }
+    
+    const removeTabBtn = e.target.closest('[data-remove-tab]');
+    if (removeTabBtn) {
+      const tabId = removeTabBtn.dataset.removeTab;
+      if (confirm('Remove this tab and all its components?')) {
+        builderTabs = builderTabs.filter(t => t.id !== tabId);
+        hideAllEditors();
+        renderBuilderTree();
+      }
+      return;
+    }
+    
+    const editBtn = e.target.closest('[data-edit-component]');
+    if (editBtn) {
+      const componentId = editBtn.dataset.editComponent;
+      const tabId = editBtn.dataset.tabId;
+      showComponentEditor(componentId, tabId);
+      return;
+    }
+    
     const removeBtn = e.target.closest('[data-remove-component]');
     if (removeBtn) {
-      builderComponents = builderComponents.filter(c => c.id !== removeBtn.dataset.removeComponent);
-      setBuilderEditing(null);
-      renderBuilderComponents();
+      const componentId = removeBtn.dataset.removeComponent;
+      const tabId = removeBtn.dataset.tabId;
+      const tab = builderTabs.find(t => t.id === tabId);
+      if (tab) {
+        tab.components = tab.components.filter(c => c.id !== componentId);
+        hideAllEditors();
+        renderBuilderTree();
+      }
     }
+  }
+
+  function showTabEditor(tabId) {
+    hideAllEditors();
+    if (builderTabEditor) builderTabEditor.classList.remove('hidden');
+    
+    if (!tabId) {
+      builderTabIdInput.value = '';
+      builderTabNameInput.value = '';
+      builderTabNameInput.focus();
+    } else {
+      const tab = builderTabs.find(t => t.id === tabId);
+      if (tab) {
+        builderTabIdInput.value = tab.id;
+        builderTabNameInput.value = tab.name;
+        builderTabNameInput.focus();
+      }
+    }
+  }
+
+  function showComponentEditor(componentId, tabId) {
+    hideAllEditors();
+    if (builderComponentEditor) builderComponentEditor.classList.remove('hidden');
+    
+    // Populate tab dropdown
+    if (builderComponentTabSelect) {
+      builderComponentTabSelect.innerHTML = '<option value="">Select a tab...</option>' +
+        builderTabs.map(tab => `<option value="${escapeHtml(tab.id)}">${escapeHtml(tab.name)}</option>`).join('');
+    }
+    
+    if (!componentId) {
+      builderComponentIdInput.value = '';
+      builderForm.reset();
+      if (builderComponentTypeSelect) builderComponentTypeSelect.value = 'text';
+      if (builderSheetSelect) builderSheetSelect.value = builderSheets[0] || '';
+      if (builderOptionsSection) builderOptionsSection.classList.add('hidden');
+      if (builderRangeSection) builderRangeSection.classList.add('hidden');
+      if (tabId && builderComponentTabSelect) builderComponentTabSelect.value = tabId;
+      builderLabelInput.focus();
+    } else {
+      const tab = builderTabs.find(t => t.id === tabId);
+      const comp = tab?.components.find(c => c.id === componentId);
+      if (comp) {
+        builderComponentIdInput.value = comp.id;
+        if (builderComponentTabSelect) builderComponentTabSelect.value = tabId;
+        builderLabelInput.value = comp.label || '';
+        ensureSheetOption(comp.sheet || '');
+        if (builderSheetSelect) builderSheetSelect.value = comp.sheet || builderSheets[0] || '';
+        builderCellInput.value = comp.cell || '';
+        const componentType = comp.componentType || 'text';
+        if (builderComponentTypeSelect) builderComponentTypeSelect.value = componentType;
+        if (builderOptionsInput) builderOptionsInput.value = comp.options || '';
+        if (builderMinInput) builderMinInput.value = comp.min ?? 0;
+        if (builderMaxInput) builderMaxInput.value = comp.max ?? 100;
+        if (builderStepInput) builderStepInput.value = comp.step ?? 1;
+        if (builderOptionsSection) builderOptionsSection.classList.toggle('hidden', componentType !== 'dropdown');
+        if (builderRangeSection) builderRangeSection.classList.toggle('hidden', componentType !== 'slider');
+      }
+    }
+  }
+
+  function hideAllEditors() {
+    if (builderTabEditor) builderTabEditor.classList.add('hidden');
+    if (builderComponentEditor) builderComponentEditor.classList.add('hidden');
+    if (builderDefaultMessage) builderDefaultMessage.classList.remove('hidden');
+  }
+
+  function cancelComponentEdit() {
+    hideAllEditors();
+  }
+
+  function handleTabFormSubmit(e) {
+    e.preventDefault();
+    const tabId = builderTabIdInput.value || createComponentId();
+    const tabName = builderTabNameInput.value.trim() || 'Untitled Tab';
+    
+    const existingTab = builderTabs.find(t => t.id === tabId);
+    if (existingTab) {
+      existingTab.name = tabName;
+    } else {
+      builderTabs.push({ id: tabId, name: tabName, components: [] });
+    }
+    
+    hideAllEditors();
+    renderBuilderTree();
   }
 
   async function saveBuilderLayout() {
     if (!builderTarget) return showToast('Select an app to design', true);
-    const schema = { components: builderComponents };
+    const schema = { tabs: builderTabs };
     try {
       const res = await apiFetch(`${apiBase}/apps/ui/save`, {
         method: 'POST',
@@ -1125,10 +1374,12 @@
     builderModal.setAttribute('aria-hidden', 'true');
     bodyEl.classList.remove('modal-open');
     builderTarget = null;
+    builderTabs = [];
     builderComponents = [];
-    setBuilderEditing(null);
-    renderBuilderComponents();
+    hideAllEditors();
+    renderBuilderTree();
     if (builderAppLabel) builderAppLabel.textContent = 'No app';
+    if (builderTreeAppName) builderTreeAppName.textContent = 'Application';
   }
 
   function normalizeComponents(list) {
