@@ -110,7 +110,7 @@
   }
 
   sessionInfo.classList.remove('hidden');
-  sessionUser.textContent = `Signed in as ${currentUser}`;
+  sessionUser.textContent = currentUser;
 
   Object.entries(tabButtons).forEach(([key, btn]) => {
     btn.addEventListener('click', () => setTab(key));
@@ -156,7 +156,8 @@
       usersArea.classList.add('hidden');
     }
     toggleCreateVisibility();
-    sessionRoles.textContent = `Roles: ${role.admin ? 'Admin' : 'User'}${developerOverride || role.developer ? ' • Developer' : ''}`;
+    const adminBadge = role.admin ? ' <span class="admin-badge">Admin</span>' : '';
+    sessionUser.innerHTML = `${escapeHtml(currentUser)}${adminBadge}`;
   }
 
   function toggleCreateVisibility() {
@@ -255,18 +256,14 @@
       return;
     }
     list.innerHTML = apps.map(a => {
-      const imageHtml = a.image_url 
-        ? `<img src="${escapeHtml(a.image_url)}" alt="${escapeHtml(a.name)}" class="app-card-image" />`
+      const imageHtml = a.image_base64
+        ? `<img src="data:image/png;base64,${a.image_base64}" alt="${escapeHtml(a.name)}" class="app-card-image" />`
         : `<div class="app-card-image" style="display: grid; place-items: center; font-size: 48px; font-weight: 700; color: var(--accent)">${escapeHtml(a.name.charAt(0).toUpperCase())}</div>`;
-      const statusMeta = a.has_ui ? '✓ UI ready' : '○ No UI yet';
       const description = formatDescription(a.description);
-      const groupInfo = a.access_group ? ` • ${escapeHtml(a.access_group)}` : '';
       return `<button type="button" class="app-card app-card-clickable" data-launch-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}" data-group="${escapeHtml(a.access_group || '')}">
         ${imageHtml}
         <div class="app-card-body">
           <h4>${escapeHtml(a.name)}</h4>
-          <div class="app-meta">${escapeHtml(a.owner)} • v${a.latest_version}${groupInfo}</div>
-          <div class="app-meta">${a.public ? '🌐 Public' : '🔒 Restricted'} • ${statusMeta}</div>
           <p>${escapeHtml(description)}</p>
         </div>
       </button>`;
@@ -310,13 +307,13 @@
     if (!owner || !name) return;
     try {
       showAppOverlay();
-      updateWorkspaceState({ title: `Launching ${name}…`, desc: 'Loading workbook and UI schema.', busy: true });
+      updateWorkspaceState({ title: name, desc: 'Loading workbook and UI schema.', busy: true });
       const schema = await fetchAppSchema(owner, name);
       await ensureWorkbookLoaded(owner, name);
       activeApp = { owner, name, schema };
       renderAppUi(schema);
       await refreshActiveApp(true, false);
-      updateWorkspaceState({ title: `${owner}/${name}`, desc: 'Workbook synced. Edit inputs to push values back to Excel.', busy: false });
+      updateWorkspaceState({ title: name, desc: 'Workbook synced. Edit inputs to push values back to Excel.', busy: false });
       if (appRefreshBtn) appRefreshBtn.disabled = false;
       if (appExitBtn) appExitBtn.disabled = false;
     } catch (err) {
@@ -964,9 +961,23 @@
       return;
     }
     developerList.innerHTML = mine.map(a => {
-      const meta = `${escapeHtml(a.owner)} • Version ${a.latest_version} • ${a.public ? 'Public' : 'Restricted'}`;
-      const icon = renderAppIcon(a);
-      return `<div class="app-card"><div class="app-card-top">${icon}<div><h4>${escapeHtml(a.name)}</h4><div class="app-meta">${meta}</div></div></div><div class="app-card-header"><div class="app-buttons"><button type="button" data-edit-app="${escapeHtml(a.name)}">Edit</button><button type="button" class="ghost" data-builder-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">Design UI</button><button type="button" class="ghost" data-preview-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">Preview UI</button></div></div><p>${escapeHtml(a.description || '')}</p></div>`;
+      const imageHtml = a.image_base64
+        ? `<img src="data:image/png;base64,${a.image_base64}" alt="${escapeHtml(a.name)}" class="app-card-image" />`
+        : `<div class="app-card-image" style="display: grid; place-items: center; font-size: 48px; font-weight: 700; color: var(--accent)">${escapeHtml(a.name.charAt(0).toUpperCase())}</div>`;
+      const statusMeta = a.has_ui ? '✓ UI ready' : '○ No UI yet';
+      return `<div class="app-card">
+        ${imageHtml}
+        <div class="app-card-body">
+          <h4>${escapeHtml(a.name)}</h4>
+          <div class="app-meta">v${a.latest_version} • ${a.public ? '🌐 Public' : '🔒 Restricted'} • ${statusMeta}</div>
+          <p>${escapeHtml(a.description || 'No description')}</p>
+          <div class="app-buttons">
+            <button type="button" data-edit-app="${escapeHtml(a.name)}">Edit</button>
+            <button type="button" class="ghost" data-builder-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">Design UI</button>
+            <button type="button" class="ghost" data-preview-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">Preview UI</button>
+          </div>
+        </div>
+      </div>`;
     }).join('');
   }
 

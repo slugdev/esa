@@ -13,10 +13,9 @@
       <div class="tagline">Excel Server Application</div>
     </div>
     <div class="session">
-      <div id="session-info" class="card inline hidden">
-        <div id="session-user"></div>
-        <div id="session-roles"></div>
-        <button id="logout-btn" type="button">Logout</button>
+      <div id="session-info" class="session-user-info hidden">
+        <span id="session-user"></span>
+        <button id="logout-btn" type="button" class="btn-small">Logout</button>
       </div>
       <button id="back-to-login" type="button" class="ghost">Login</button>
     </div>
@@ -42,10 +41,7 @@
     <div id="app-overlay" class="app-overlay hidden" aria-hidden="true">
       <div class="app-overlay-content">
         <div class="app-overlay-header">
-          <div>
-            <h3 id="app-workspace-title">Select an application</h3>
-            <p class="hint" id="app-workspace-desc">Launch an application to render its authored UI.</p>
-          </div>
+          <h3 id="app-workspace-title">Select an application</h3>
           <div class="workspace-actions">
             <button type="button" id="app-refresh" class="ghost" disabled>Refresh Data</button>
             <button type="button" id="app-exit" class="ghost" disabled>Close App</button>
@@ -54,6 +50,9 @@
         <div id="app-ui-body" class="app-overlay-body">
           <div class="hint" id="app-ui-empty">Choose an application to load its interface.</div>
           <form id="app-ui-form" class="hidden"></form>
+        </div>
+        <div class="app-overlay-footer">
+          <div class="hint" id="app-workspace-desc">Launch an application to render its authored UI.</div>
         </div>
       </div>
     </div>
