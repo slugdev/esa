@@ -1,27 +1,19 @@
 (() => {
-        if (file) {
-          const payload = { name, description, public: isPublic };
-          if (access_group) payload.access_group = access_group;
-          payload.file_base64 = await fileToBase64(file);
-          if (image_base64) payload.image_base64 = image_base64;
-          const res = await fetch(`${apiBase}/apps/version`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...authHeaders() },
-            body: JSON.stringify(payload)
-          });
-          if (!res.ok) throw new Error('Version publish failed');
-        } else {
-          const payload = { description, public: isPublic };
-          if (access_group) payload.access_group = access_group;
-          if (image_base64) payload.image_base64 = image_base64;
-          const res = await fetch(`${apiBase}/apps/${encodeURIComponent(editingApp.name)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', ...authHeaders() },
-            body: JSON.stringify(payload)
-          });
-          if (!res.ok) throw new Error('Update failed');
-        }
-        showToast(file ? 'New version published' : 'Application updated');
+  const apiBase = 'http://localhost:8080';
+  let token = sessionStorage.getItem('esa_token');
+  let currentUser = sessionStorage.getItem('esa_user');
+  let role = { admin: false, developer: false };
+  let developerOverride = false;
+  let appsCache = [];
+  let formMode = 'create';
+  let editingApp = null;
+  let activeApp = null;
+  let activeComponents = [];
+  let workbookApp = null;
+  let builderTarget = null;
+  let builderComponents = [];
+  let builderSheets = [];
+  const qs = (sel) => document.querySelector(sel);
   const toastEl = qs('#toast');
 
   const showToast = (msg, isError = false) => {
@@ -33,6 +25,24 @@
   };
 
   const authHeaders = () => token ? { 'Authorization': `Bearer ${token}` } : {};
+  let redirectingToLogin = false;
+
+  const handleUnauthorized = () => {
+    if (redirectingToLogin) return;
+    redirectingToLogin = true;
+    showToast('Session expired. Redirecting to login…', true);
+    clearSession();
+    window.location.replace('login.html');
+  };
+
+  const apiFetch = async (input, init = {}) => {
+    const res = await fetch(input, init);
+    if (res.status === 401) {
+      handleUnauthorized();
+      throw new Error('Unauthorized');
+    }
+    return res;
+  };
 
   const sessionInfo = qs('#session-info');
   const logoutBtn = qs('#logout-btn');
@@ -66,7 +76,7 @@
   const builderEmpty = qs('#builder-empty');
   const builderForm = qs('#builder-form');
   const builderLabelInput = qs('#builder-label');
-  const builderSheetInput = qs('#builder-sheet');
+  const builderSheetSelect = qs('#builder-sheet');
   const builderCellInput = qs('#builder-cell');
   const builderModeSelect = qs('#builder-mode');
   const builderInputTypeSelect = qs('#builder-input-type');
@@ -74,6 +84,12 @@
   const builderResetBtn = qs('#builder-reset');
   const builderAppLabel = qs('#builder-app-label');
   const builderSaveLayoutBtn = qs('#builder-save-layout');
+  const previewModal = qs('#ui-preview-modal');
+  const previewClose = qs('#ui-preview-close');
+  const previewCloseBtn = qs('#ui-preview-close-btn');
+  const previewContent = qs('#ui-preview-content');
+  const previewEmpty = qs('#ui-preview-empty');
+  const previewSubtitle = qs('#ui-preview-subtitle');
   const tabButtons = {
     apps: qs('[data-tab-btn="apps"]'),
     developer: qs('[data-tab-btn="developer"]'),
@@ -99,7 +115,8 @@
   });
 
   logoutBtn.addEventListener('click', async () => {
-    try { await fetch(`${apiBase}/logout`, { method: 'POST', headers: authHeaders() }); } catch (_) {}
+    try { await exitActiveApp(); } catch (_) {}
+    try { await apiFetch(`${apiBase}/logout`, { method: 'POST', headers: authHeaders() }); } catch (_) {}
     clearSession();
     window.location.replace('login.html');
   });
@@ -116,7 +133,7 @@
     role = { admin: false, developer: false };
     if (!token || !currentUser) { toggleCreateVisibility(); return; }
     try {
-      const res = await fetch(`${apiBase}/users`, { headers: { ...authHeaders() } });
+      const res = await apiFetch(`${apiBase}/users`, { headers: { ...authHeaders() } });
       if (res.status === 200) {
         const users = await res.json();
         const me = users.find(u => u.name === currentUser);
@@ -178,6 +195,9 @@
     if (e.key === 'Escape' && builderModal && !builderModal.classList.contains('hidden')) {
       closeBuilderModal();
     }
+    if (e.key === 'Escape' && previewModal && !previewModal.classList.contains('hidden')) {
+      closePreviewModal();
+    }
   });
 
   appsListEl?.addEventListener('click', handleAppsListClick);
@@ -191,6 +211,13 @@
       if (e.target === builderModal) closeBuilderModal();
     });
   }
+  if (previewClose) previewClose.addEventListener('click', () => closePreviewModal());
+  if (previewCloseBtn) previewCloseBtn.addEventListener('click', () => closePreviewModal());
+  if (previewModal) {
+    previewModal.addEventListener('click', (e) => {
+      if (e.target === previewModal) closePreviewModal();
+    });
+  }
   builderResetBtn?.addEventListener('click', () => setBuilderEditing(null));
   builderForm?.addEventListener('submit', handleBuilderFormSubmit);
   builderComponentsEl?.addEventListener('click', handleBuilderListClick);
@@ -201,7 +228,7 @@
   async function refreshApps() {
     if (!token) { showToast('Login first', true); return; }
     try {
-      const res = await fetch(`${apiBase}/apps`, { headers: { ...authHeaders() } });
+      const res = await apiFetch(`${apiBase}/apps`, { headers: { ...authHeaders() } });
       if (!res.ok) throw new Error('Failed to load apps');
       const apps = await res.json();
       appsCache = apps;
@@ -256,7 +283,7 @@
       await ensureWorkbookLoaded(owner, name);
       activeApp = { owner, name, schema };
       renderAppUi(schema);
-      await refreshActiveApp();
+      await refreshActiveApp(true, false);
       updateWorkspaceState({ title: `${owner}/${name}`, desc: 'Workbook synced. Edit inputs to push values back to Excel.', busy: false });
       if (appRefreshBtn) appRefreshBtn.disabled = false;
       if (appExitBtn) appExitBtn.disabled = false;
@@ -269,7 +296,7 @@
   async function ensureWorkbookLoaded(owner, name) {
     if (workbookApp && workbookApp.owner === owner && workbookApp.name === name) return;
     await closeWorkbook();
-    const res = await fetch(`${apiBase}/excel/load`, {
+    const res = await apiFetch(`${apiBase}/excel/load`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ owner, name })
@@ -281,7 +308,7 @@
   async function closeWorkbook() {
     if (!workbookApp) return;
     try {
-      await fetch(`${apiBase}/excel/close`, { method: 'POST', headers: { ...authHeaders() } });
+      await apiFetch(`${apiBase}/excel/close`, { method: 'POST', headers: { ...authHeaders() } });
     } catch (_) {}
     workbookApp = null;
   }
@@ -298,29 +325,41 @@
     if (appWorkspaceDesc) appWorkspaceDesc.textContent = 'Launch an application to render its authored UI.';
   }
 
-  async function refreshActiveApp(showToastOnError = false) {
+  async function refreshActiveApp(showToastOnError = false, notifyOnSuccess = true) {
     if (!activeApp || !activeComponents.length) return;
-    try {
-      for (const component of activeComponents) {
+    const failures = [];
+    await Promise.all(activeComponents.map(async (component) => {
+      if (!component?.sheet || !component?.cell) return;
+      try {
         const value = await queryComponentValue(component);
         updateComponentDisplay(component.id, value);
+      } catch (err) {
+        const reason = err?.message || 'Unable to read cell';
+        failures.push(`${component.label || component.cell || 'Field'}: ${reason}`);
+        console.warn('Failed to refresh component', component, err);
       }
-      if (showToastOnError) showToast('Values refreshed');
-    } catch (err) {
-      if (showToastOnError) showToast(err.message || 'Refresh failed', true);
+    }));
+    if (showToastOnError) {
+      if (failures.length) {
+        const [first, ...rest] = failures;
+        const extra = rest.length ? ` (+${rest.length} more)` : '';
+        showToast(first + extra, true);
+      } else if (notifyOnSuccess) {
+        showToast('Values refreshed');
+      }
     }
   }
 
   async function queryComponentValue(component) {
     if (!component?.sheet || !component?.cell) return '';
-    const res = await fetch(`${apiBase}/excel/query`, {
+    const res = await apiFetch(`${apiBase}/excel/query`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ sheet: component.sheet, range: component.cell })
     });
-    if (!res.ok) throw new Error('Unable to read cell');
-    const data = await res.json();
-    return data.value;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || 'Unable to read cell');
+    return data?.value ?? '';
   }
 
   function updateComponentDisplay(id, value) {
@@ -388,12 +427,13 @@
       payload.value = rawValue ?? '';
     }
     try {
-      const res = await fetch(`${apiBase}/excel/set`, {
+      const res = await apiFetch(`${apiBase}/excel/set`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error('Failed to push value');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to push value');
       await refreshActiveApp();
     } catch (err) {
       showToast(err.message || 'Failed to push value', true);
@@ -416,7 +456,7 @@
   }
 
   async function fetchAppSchema(owner, name) {
-    const res = await fetch(`${apiBase}/apps/ui/get`, {
+    const res = await apiFetch(`${apiBase}/apps/ui/get`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({ owner, name })
@@ -426,14 +466,30 @@
     return data.schema || { components: [] };
   }
 
+  async function fetchWorkbookSheets(owner, name) {
+    const res = await apiFetch(`${apiBase}/excel/sheets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ owner, name })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || 'Unable to load sheets');
+    return Array.isArray(data?.sheets) ? data.sheets : [];
+  }
+
   async function openBuilder(owner, name) {
     if (!token) return showToast('Login first', true);
     if (!canAuthorApp(owner)) return showToast('Developer access required', true);
     closeDevModal();
     try {
-      const schema = await fetchAppSchema(owner, name);
+      showSheetLoadingState();
+      const [schema, sheets] = await Promise.all([
+        fetchAppSchema(owner, name),
+        fetchWorkbookSheets(owner, name)
+      ]);
       builderTarget = { owner, name };
       builderComponents = normalizeComponents(schema?.components);
+      setSheetOptions(sheets);
       if (builderAppLabel) builderAppLabel.textContent = `${owner}/${name}`;
       setBuilderEditing(null);
       renderBuilderComponents();
@@ -457,6 +513,46 @@
     }).join('');
   }
 
+  function showSheetLoadingState() {
+    if (!builderSheetSelect) return;
+    builderSheetSelect.disabled = true;
+    builderSheetSelect.innerHTML = '<option value="">Loading sheets…</option>';
+    builderSheetSelect.value = '';
+  }
+
+  function setSheetOptions(sheets, preferred) {
+    builderSheets = Array.isArray(sheets) ? sheets.filter(Boolean) : [];
+    renderSheetOptions(preferred);
+  }
+
+  function ensureSheetOption(sheet) {
+    if (!sheet) return;
+    if (!builderSheets.includes(sheet)) {
+      builderSheets.push(sheet);
+    }
+    renderSheetOptions(sheet);
+  }
+
+  function renderSheetOptions(preferred) {
+    if (!builderSheetSelect) return;
+    const targetValue = preferred ?? builderSheetSelect.value;
+    if (!builderSheets.length) {
+      builderSheetSelect.disabled = true;
+      builderSheetSelect.innerHTML = '<option value="">No sheets found</option>';
+      builderSheetSelect.value = '';
+      return;
+    }
+    builderSheetSelect.disabled = false;
+    builderSheetSelect.innerHTML = builderSheets
+      .map(sheet => `<option value="${escapeHtml(sheet)}">${escapeHtml(sheet)}</option>`)
+      .join('');
+    if (targetValue && builderSheets.includes(targetValue)) {
+      builderSheetSelect.value = targetValue;
+    } else {
+      builderSheetSelect.value = builderSheets[0];
+    }
+  }
+
   function setBuilderEditing(id) {
     if (!builderForm) return;
     if (!id) {
@@ -464,14 +560,15 @@
       builderForm.reset();
       builderModeSelect.value = 'display';
       builderInputTypeSelect.value = 'text';
-      if (builderSheetInput) builderSheetInput.value = 'Sheet1';
+      if (builderSheetSelect) builderSheetSelect.value = builderSheets[0] || '';
       return;
     }
     const comp = builderComponents.find(c => c.id === id);
     if (!comp) return setBuilderEditing(null);
     builderComponentIdInput.value = comp.id;
     builderLabelInput.value = comp.label || '';
-    builderSheetInput.value = comp.sheet || '';
+    ensureSheetOption(comp.sheet || '');
+    if (builderSheetSelect) builderSheetSelect.value = comp.sheet || builderSheets[0] || '';
     builderCellInput.value = comp.cell || '';
     builderModeSelect.value = comp.mode || 'display';
     builderInputTypeSelect.value = comp.inputType || 'text';
@@ -481,7 +578,8 @@
     e.preventDefault();
     if (!builderTarget) return showToast('Select an app to design', true);
     const label = builderLabelInput.value.trim() || 'Untitled field';
-    const sheet = builderSheetInput.value.trim() || 'Sheet1';
+    const sheet = (builderSheetSelect?.value || '').trim();
+    if (!sheet) return showToast('Select a sheet', true);
     const cell = builderCellInput.value.trim();
     if (!cell) return showToast('Cell / range is required', true);
     const mode = builderModeSelect.value || 'display';
@@ -512,7 +610,7 @@
     if (!builderTarget) return showToast('Select an app to design', true);
     const schema = { components: builderComponents };
     try {
-      const res = await fetch(`${apiBase}/apps/ui/save`, {
+      const res = await apiFetch(`${apiBase}/apps/ui/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ owner: builderTarget.owner, name: builderTarget.name, schema_json: JSON.stringify(schema) })
@@ -524,6 +622,60 @@
     } catch (err) {
       showToast(err.message || 'Failed to save layout', true);
     }
+  }
+
+  async function previewAppUi(owner, name) {
+    if (!token) return showToast('Login first', true);
+    if (!owner || !name) return;
+    try {
+      const schema = await fetchAppSchema(owner, name);
+      renderPreviewComponents(schema?.components || []);
+      openPreviewModal(owner, name);
+    } catch (err) {
+      showToast(err.message || 'Unable to preview UI', true);
+    }
+  }
+
+  function renderPreviewComponents(components) {
+    if (!previewContent || !previewEmpty) return;
+    const normalized = normalizeComponents(components || []);
+    if (!normalized.length) {
+      previewContent.innerHTML = '';
+      previewEmpty.classList.remove('hidden');
+      return;
+    }
+    previewEmpty.classList.add('hidden');
+    previewContent.innerHTML = normalized.map(previewComponentMarkup).join('');
+  }
+
+  function previewComponentMarkup(comp) {
+    const mode = comp.mode || 'display';
+    const inputType = comp.inputType || 'text';
+    const label = escapeHtml(comp.label || comp.cell || 'Field');
+    const location = `${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')}`;
+    if (mode === 'input') {
+      return `<div class="app-ui-field preview"><label>${label}</label><input type="${escapeHtml(inputType)}" disabled placeholder="${location}" /><div class="app-meta">Two-way • ${location}</div></div>`;
+    }
+    return `<div class="app-ui-field preview"><label>${label}</label><output>Preview value</output><div class="app-meta">Display • ${location}</div></div>`;
+  }
+
+  function openPreviewModal(owner, name) {
+    if (!previewModal) return;
+    if (previewSubtitle) previewSubtitle.textContent = `${owner}/${name}`;
+    previewModal.classList.remove('hidden');
+    previewModal.setAttribute('aria-hidden', 'false');
+    bodyEl.classList.add('modal-open');
+  }
+
+  function closePreviewModal() {
+    if (!previewModal) return;
+    previewModal.classList.add('hidden');
+    previewModal.setAttribute('aria-hidden', 'true');
+    const otherModalOpen = (devModal && !devModal.classList.contains('hidden')) || (builderModal && !builderModal.classList.contains('hidden'));
+    if (!otherModalOpen) bodyEl.classList.remove('modal-open');
+    if (previewContent) previewContent.innerHTML = '';
+    previewEmpty?.classList.remove('hidden');
+    if (previewSubtitle) previewSubtitle.textContent = 'Select an app to preview its interface.';
   }
 
   const createForm = qs('#create-form');
@@ -556,6 +708,13 @@
         const target = builderBtn.dataset.builderApp;
         const owner = builderBtn.dataset.owner || currentUser;
         openBuilder(owner, target);
+        return;
+      }
+      const previewBtn = e.target.closest('[data-preview-app]');
+      if (previewBtn) {
+        const target = previewBtn.dataset.previewApp;
+        const owner = previewBtn.dataset.owner || currentUser;
+        previewAppUi(owner, target);
       }
     });
   }
@@ -581,24 +740,30 @@
         const payload = { name, description, file_base64, public: isPublic };
         if (access_group) payload.access_group = access_group;
         if (image_base64) payload.image_base64 = image_base64;
-        const res = await fetch(`${apiBase}/apps`, {
+        const res = await apiFetch(`${apiBase}/apps`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify(payload)
         });
         if (!res.ok) throw new Error('Create failed');
         showToast('Application created');
+      } else if (file) {
+        const payload = { name, description, public: isPublic };
+        if (access_group) payload.access_group = access_group;
+        payload.file_base64 = await fileToBase64(file);
+        if (image_base64) payload.image_base64 = image_base64;
+        const res = await apiFetch(`${apiBase}/apps/version`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Version publish failed');
+        showToast('New version published');
       } else {
         const payload = { description, public: isPublic };
         if (access_group) payload.access_group = access_group;
-        if (file) {
-          payload.file_base64 = await fileToBase64(file);
-          payload.new_version = true;
-        } else {
-          payload.new_version = false;
-        }
         if (image_base64) payload.image_base64 = image_base64;
-        const res = await fetch(`${apiBase}/apps/${encodeURIComponent(editingApp.name)}`, {
+        const res = await apiFetch(`${apiBase}/apps/${encodeURIComponent(editingApp.name)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify(payload)
@@ -627,7 +792,7 @@
     };
     if (!payload.username || !payload.password) return showToast('Username and password required', true);
     try {
-      const res = await fetch(`${apiBase}/users`, {
+      const res = await apiFetch(`${apiBase}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(payload)
@@ -643,7 +808,7 @@
   async function loadUsers() {
     if (!role.admin) return;
     try {
-      const res = await fetch(`${apiBase}/users`, { headers: { ...authHeaders() } });
+      const res = await apiFetch(`${apiBase}/users`, { headers: { ...authHeaders() } });
       if (!res.ok) throw new Error('Cannot load users');
       const users = await res.json();
       renderUsers(users);
@@ -752,7 +917,7 @@
     developerList.innerHTML = mine.map(a => {
       const meta = `${escapeHtml(a.owner)} • Version ${a.latest_version} • ${a.public ? 'Public' : 'Restricted'}`;
       const icon = renderAppIcon(a);
-      return `<div class="app-card"><div class="app-card-top">${icon}<div><h4>${escapeHtml(a.name)}</h4><div class="app-meta">${meta}</div></div></div><div class="app-card-header"><div class="app-buttons"><button type="button" data-edit-app="${escapeHtml(a.name)}">Edit</button><button type="button" class="ghost" data-builder-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">Design UI</button></div></div><p>${escapeHtml(a.description || '')}</p></div>`;
+      return `<div class="app-card"><div class="app-card-top">${icon}<div><h4>${escapeHtml(a.name)}</h4><div class="app-meta">${meta}</div></div></div><div class="app-card-header"><div class="app-buttons"><button type="button" data-edit-app="${escapeHtml(a.name)}">Edit</button><button type="button" class="ghost" data-builder-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">Design UI</button><button type="button" class="ghost" data-preview-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">Preview UI</button></div></div><p>${escapeHtml(a.description || '')}</p></div>`;
     }).join('');
   }
 

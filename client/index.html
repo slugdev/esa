@@ -155,7 +155,11 @@
             <input name="label" id="builder-label" required>
           </label>
           <div class="two-col">
-            <label>Sheet <input name="sheet" id="builder-sheet" placeholder="Sheet1" required></label>
+            <label>Sheet
+              <select name="sheet" id="builder-sheet" required>
+                <option value="">Loading sheets…</option>
+              </select>
+            </label>
             <label>Cell / Range <input name="cell" id="builder-cell" placeholder="A1" required></label>
           </div>
           <div class="two-col">
@@ -181,6 +185,23 @@
       <div class="actions builder-actions">
         <button type="button" id="builder-save-layout">Save Layout</button>
         <button type="button" id="ui-builder-cancel" class="ghost">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ui-preview-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="ui-preview-title">
+      <div class="modal-head">
+        <h3 id="ui-preview-title">UI Preview</h3>
+        <button type="button" id="ui-preview-close" class="ghost icon-btn" aria-label="Close preview">&#10005;</button>
+      </div>
+      <p class="hint" id="ui-preview-subtitle">Select an app to preview its interface.</p>
+      <div class="workspace-body">
+        <div id="ui-preview-empty" class="hint">No components defined yet. Add fields in the builder to see them here.</div>
+        <div id="ui-preview-content" class="app-ui-preview"></div>
+      </div>
+      <div class="actions">
+        <button type="button" id="ui-preview-close-btn" class="ghost">Close</button>
       </div>
     </div>
   </div>
