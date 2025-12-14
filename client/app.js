@@ -964,17 +964,15 @@
       const imageHtml = a.image_base64
         ? `<img src="data:image/png;base64,${a.image_base64}" alt="${escapeHtml(a.name)}" class="app-card-image" />`
         : `<div class="app-card-image" style="display: grid; place-items: center; font-size: 48px; font-weight: 700; color: var(--accent)">${escapeHtml(a.name.charAt(0).toUpperCase())}</div>`;
-      const statusMeta = a.has_ui ? '✓ UI ready' : '○ No UI yet';
-      return `<div class="app-card">
+      const description = formatDescription(a.description);
+      return `<div class="app-card dev-app-card">
         ${imageHtml}
         <div class="app-card-body">
           <h4>${escapeHtml(a.name)}</h4>
-          <div class="app-meta">v${a.latest_version} • ${a.public ? '🌐 Public' : '🔒 Restricted'} • ${statusMeta}</div>
-          <p>${escapeHtml(a.description || 'No description')}</p>
+          <p>${escapeHtml(description)}</p>
           <div class="app-buttons">
             <button type="button" data-edit-app="${escapeHtml(a.name)}">Edit</button>
-            <button type="button" class="ghost" data-builder-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">Design UI</button>
-            <button type="button" class="ghost" data-preview-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">Preview UI</button>
+            <button type="button" class="ghost" data-builder-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">UI Builder</button>
           </div>
         </div>
       </div>`;

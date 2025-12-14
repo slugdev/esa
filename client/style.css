@@ -220,7 +220,8 @@ input[type="file"] { padding: 8px; }
 .app-ui-field input, .app-ui-field output { font-size: 15px; }
 .app-ui-field output { background: transparent; color: var(--accent-strong); }
 .app-card .app-buttons { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
-.app-card .app-buttons button { flex: 1; min-width: 110px; }
+.app-card .app-buttons button { flex: 1; min-width: 90px; font-size: 13px; padding: 8px 10px; }
+.dev-app-card { border: 1px solid rgba(90, 179, 255, 0.3); }
 .app-card {
   border: 1px solid var(--border);
   border-radius: 12px;
