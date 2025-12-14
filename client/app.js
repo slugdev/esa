@@ -704,40 +704,63 @@
     }
     
     builderEmpty?.classList.add('hidden');
-    builderComponentsEl.innerHTML = builderTabs.map(tab => {
+    builderComponentsEl.innerHTML = builderTabs.map((tab, tabIndex) => {
       const componentCount = tab.components?.length || 0;
-      const componentsHtml = (tab.components || []).map(comp => {
+      const collapsed = tab.collapsed || false;
+      const componentsHtml = (tab.components || []).map((comp, compIndex) => {
         const typeLabel = getComponentTypeLabel(comp.componentType || 'text');
-        const meta = `${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')} • ${typeLabel}`;
+        const typeIcon = getComponentTypeIcon(comp.componentType || 'text');
+        const cellRef = `${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')}`;
         return `<div class="tree-node tree-component-node" data-component-id="${comp.id}" data-tab-id="${tab.id}">
-          <span class="tree-icon">•</span>
+          <span class="tree-icon component-icon">${typeIcon}</span>
           <div class="tree-node-content">
             <div class="tree-node-label">${escapeHtml(comp.label || comp.cell || 'Component')}</div>
-            <div class="tree-node-meta">${meta}</div>
+            <div class="tree-node-meta">
+              <span class="tree-meta-cell">${cellRef}</span>
+              <span class="tree-meta-type">${typeLabel}</span>
+            </div>
           </div>
           <div class="tree-node-actions">
-            <button type="button" class="tree-btn" data-edit-component="${comp.id}" data-tab-id="${tab.id}" title="Edit">✏️</button>
-            <button type="button" class="tree-btn" data-remove-component="${comp.id}" data-tab-id="${tab.id}" title="Remove">❌</button>
+            <button type="button" class="tree-btn tree-btn-edit" data-edit-component="${comp.id}" data-tab-id="${tab.id}" title="Edit Component">✏️</button>
+            <button type="button" class="tree-btn tree-btn-delete" data-remove-component="${comp.id}" data-tab-id="${tab.id}" title="Remove Component">🗑️</button>
           </div>
         </div>`;
       }).join('');
       
-      return `<div class="tree-tab-group">
+      const emptyMessage = componentCount === 0 ? '<div class="tree-empty-tab">No components yet. Click + to add one.</div>' : '';
+      
+      return `<div class="tree-tab-group ${collapsed ? 'collapsed' : ''}">
         <div class="tree-node tree-tab-node" data-tab-id="${tab.id}">
-          <span class="tree-icon">📑</span>
+          <button type="button" class="tree-expand-btn" data-toggle-tab="${tab.id}" title="${collapsed ? 'Expand' : 'Collapse'}">
+            <span class="tree-expand-icon">${collapsed ? '▶' : '▼'}</span>
+          </button>
+          <span class="tree-icon tab-icon">📑</span>
           <div class="tree-node-content">
             <div class="tree-node-label">${escapeHtml(tab.name)}</div>
             <div class="tree-node-meta">${componentCount} component${componentCount !== 1 ? 's' : ''}</div>
           </div>
           <div class="tree-node-actions">
-            <button type="button" class="tree-btn" data-add-component="${tab.id}" title="Add Component">+</button>
-            <button type="button" class="tree-btn" data-edit-tab="${tab.id}" title="Edit Tab">✏️</button>
-            <button type="button" class="tree-btn" data-remove-tab="${tab.id}" title="Remove Tab">❌</button>
+            <button type="button" class="tree-btn tree-btn-add" data-add-component="${tab.id}" title="Add Component">+ Component</button>
+            <button type="button" class="tree-btn tree-btn-edit" data-edit-tab="${tab.id}" title="Edit Tab">✏️</button>
+            <button type="button" class="tree-btn tree-btn-delete" data-remove-tab="${tab.id}" title="Remove Tab">🗑️</button>
           </div>
         </div>
-        <div class="tree-children" style="margin-left: 20px;">${componentsHtml}</div>
+        <div class="tree-children ${collapsed ? 'hidden' : ''}">${emptyMessage}${componentsHtml}</div>
       </div>`;
     }).join('');
+  }
+
+  function getComponentTypeIcon(type) {
+    const icons = {
+      text: '📝',
+      number: '🔢',
+      textarea: '📄',
+      dropdown: '📋',
+      slider: '🎚️',
+      checkbox: '☑️',
+      display: '👁️'
+    };
+    return icons[type] || '📝';
   }
 
   function showSheetLoadingState() {
@@ -871,6 +894,18 @@
   }
 
   function handleBuilderTreeClick(e) {
+    // Toggle tab collapse/expand
+    const toggleBtn = e.target.closest('[data-toggle-tab]');
+    if (toggleBtn) {
+      const tabId = toggleBtn.dataset.toggleTab;
+      const tab = builderTabs.find(t => t.id === tabId);
+      if (tab) {
+        tab.collapsed = !tab.collapsed;
+        renderBuilderTree();
+      }
+      return;
+    }
+    
     const addComponentBtn = e.target.closest('[data-add-component]');
     if (addComponentBtn) {
       const tabId = addComponentBtn.dataset.addComponent;

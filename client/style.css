@@ -365,62 +365,212 @@ input[type="file"] { padding: 8px; }
 }
 
 /* Tree Structure */
-.tree-node {
-  margin-left: 0;
-  padding: 4px 0;
+.builder-tree {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
 }
 
-.tree-node-header {
+.tree-node {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.2s;
+  gap: 8px;
+  padding: 8px 10px;
+  margin: 2px 0;
+  border-radius: 8px;
+  transition: all 0.2s;
+  position: relative;
 }
 
-.tree-node-header:hover {
+.tree-tab-node {
   background: rgba(90, 179, 255, 0.08);
+  border: 1px solid rgba(90, 179, 255, 0.2);
+  padding: 10px 12px;
+  margin: 6px 0;
 }
 
-.tree-icon {
-  font-size: 14px;
-  width: 16px;
-  text-align: center;
+.tree-tab-node:hover {
+  background: rgba(90, 179, 255, 0.12);
+  border-color: rgba(90, 179, 255, 0.35);
 }
 
-.tree-label {
-  flex: 1;
-  font-size: 13px;
-  font-weight: 500;
+.tree-component-node {
+  background: rgba(14, 26, 48, 0.5);
+  border: 1px solid rgba(90, 179, 255, 0.15);
+  margin-left: 20px;
 }
 
-.tree-btn {
+.tree-component-node:hover {
+  background: rgba(90, 179, 255, 0.05);
+  border-color: rgba(90, 179, 255, 0.25);
+  transform: translateX(2px);
+}
+
+.tree-expand-btn {
   background: transparent;
   border: none;
   color: var(--muted);
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   border-radius: 4px;
-  font-size: 11px;
-  opacity: 0;
   transition: all 0.2s;
 }
 
-.tree-node-header:hover .tree-btn {
-  opacity: 1;
-}
-
-.tree-btn:hover {
+.tree-expand-btn:hover {
   background: rgba(90, 179, 255, 0.15);
   color: var(--accent);
 }
 
+.tree-expand-icon {
+  font-size: 10px;
+  display: block;
+}
+
+.tree-icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.tree-icon.tab-icon {
+  font-size: 18px;
+}
+
+.tree-icon.component-icon {
+  font-size: 14px;
+}
+
+.tree-node-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tree-node-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-tab-node .tree-node-label {
+  font-size: 15px;
+}
+
+.tree-node-meta {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.tree-meta-cell {
+  font-family: 'Consolas', 'Monaco', monospace;
+  background: rgba(90, 179, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.tree-meta-type {
+  opacity: 0.85;
+}
+
+.tree-node-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.tree-node:hover .tree-node-actions {
+  opacity: 1;
+}
+
+.tree-btn {
+  background: rgba(90, 179, 255, 0.1);
+  border: 1px solid rgba(90, 179, 255, 0.2);
+  color: var(--text);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.tree-btn:hover {
+  background: rgba(90, 179, 255, 0.2);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  transform: translateY(-1px);
+}
+
+.tree-btn-add {
+  background: rgba(90, 179, 255, 0.15);
+  border-color: rgba(90, 179, 255, 0.3);
+}
+
+.tree-btn-add:hover {
+  background: var(--accent);
+  border-color: var(--accent-strong);
+  color: #0b162b;
+}
+
+.tree-btn-edit {
+  padding: 4px 6px;
+}
+
+.tree-btn-delete {
+  padding: 4px 6px;
+}
+
+.tree-btn-delete:hover {
+  background: rgba(255, 107, 107, 0.2);
+  border-color: var(--error);
+  color: var(--error);
+}
+
 .tree-children {
+  margin-left: 0;
+  margin-top: 4px;
+  padding-left: 32px;
+  border-left: 2px solid rgba(90, 179, 255, 0.15);
+}
+
+.tree-children.hidden {
+  display: none;
+}
+
+.tree-tab-group {
+  margin-bottom: 8px;
+}
+
+.tree-tab-group.collapsed .tree-children {
+  display: none;
+}
+
+.tree-empty-tab {
+  padding: 16px 12px;
   margin-left: 20px;
-  border-left: 1px solid rgba(90, 179, 255, 0.12);
-  padding-left: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
+  background: rgba(90, 179, 255, 0.03);
+  border: 1px dashed rgba(90, 179, 255, 0.2);
+  border-radius: 6px;
 }
 
 .tree-add-btn {
