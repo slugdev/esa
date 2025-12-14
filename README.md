@@ -1,4 +1,4 @@
-# ESA - Excel Server Application
+Excel Server Application
 
 A modern web-based platform for hosting and managing Excel-powered applications with a streamlined app store interface.
 
