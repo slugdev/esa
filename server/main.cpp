@@ -94,7 +94,6 @@ std::vector<std::string> split_csv(const std::string &csv);
 std::string to_lower(const std::string &s);
 std::string normalize_sheet_key(const std::string &name);
 std::string sanitize_range_address(const std::string &address);
-bool parse_single_cell_address(const std::string &address, long &row_out, long &col_out);
 
 std::string base64_decode(const std::string &input)
 {
@@ -699,30 +698,6 @@ CComPtr<IDispatch> dispatch_call_bstr(IDispatch *disp, const wchar_t *name, cons
     return nullptr;
 }
 
-CComPtr<IDispatch> dispatch_get_bstr_arg(IDispatch *disp, const wchar_t *name, const std::wstring &arg)
-{
-    VARIANT v;
-    VariantInit(&v);
-    v.vt = VT_BSTR;
-    v.bstrVal = SysAllocString(arg.c_str());
-    VARIANT res;
-    VariantInit(&res);
-    bool ok = dispatch_invoke(disp, name, DISPATCH_PROPERTYGET, &v, 1, &res);
-    VariantClear(&v);
-    if (!ok)
-    {
-        VariantClear(&res);
-        return nullptr;
-    }
-    if (res.vt == VT_DISPATCH)
-    {
-        CComPtr<IDispatch> out = res.pdispVal;
-        return out;
-    }
-    VariantClear(&res);
-    return nullptr;
-}
-
 bool dispatch_put_variant(IDispatch *disp, const wchar_t *name, VARIANT *val)
 {
     return dispatch_invoke(disp, name, DISPATCH_PROPERTYPUT, val, 1, nullptr);
@@ -1123,35 +1098,7 @@ private:
             return false;
         }
         std::wstring wrange(normalized_range.begin(), normalized_range.end());
-        CComPtr<IDispatch> rng = dispatch_get_bstr_arg(sheet_obj, L"Range", wrange);
-        if (!rng)
-            rng = dispatch_call_bstr(sheet_obj, L"Range", wrange);
-        if (!rng)
-        {
-            long row = 0;
-            long col = 0;
-            if (parse_single_cell_address(normalized_range, row, col))
-            {
-                CComPtr<IDispatch> cells = dispatch_get(sheet_obj, L"Cells");
-                if (cells)
-                {
-                    VARIANT args[2];
-                    VariantInit(&args[0]);
-                    VariantInit(&args[1]);
-                    args[0].vt = VT_I4;
-                    args[0].lVal = col;
-                    args[1].vt = VT_I4;
-                    args[1].lVal = row;
-                    VARIANT res;
-                    VariantInit(&res);
-                    if (dispatch_invoke(cells, L"Item", DISPATCH_PROPERTYGET, args, 2, &res) && res.vt == VT_DISPATCH)
-                    {
-                        rng = res.pdispVal;
-                    }
-                    VariantClear(&res);
-                }
-            }
-        }
+        CComPtr<IDispatch> rng = dispatch_call_bstr(sheet_obj, L"Range", wrange);
         if (!rng)
         {
             err = "range not found";
@@ -1475,51 +1422,6 @@ std::string sanitize_range_address(const std::string &address)
         trimmed_addr = trimmed_addr.substr(1, trimmed_addr.size() - 2);
     }
     return trimmed_addr;
-}
-
-bool parse_single_cell_address(const std::string &address, long &row_out, long &col_out)
-{
-    std::string cleaned;
-    cleaned.reserve(address.size());
-    for (char c : address)
-    {
-        if (c == '$' || c == ' ' || c == '\t' || c == '\r' || c == '\n')
-            continue;
-        if (c == ':')
-            return false;
-        cleaned.push_back(static_cast<char>(::toupper(static_cast<unsigned char>(c))));
-    }
-    if (cleaned.empty())
-        return false;
-    size_t pos = 0;
-    while (pos < cleaned.size() && std::isalpha(static_cast<unsigned char>(cleaned[pos])))
-        ++pos;
-    if (pos == 0 || pos == cleaned.size())
-        return false;
-    std::string col_part = cleaned.substr(0, pos);
-    std::string row_part = cleaned.substr(pos);
-    if (row_part.empty())
-        return false;
-    for (char ch : row_part)
-    {
-        if (!std::isdigit(static_cast<unsigned char>(ch)))
-            return false;
-    }
-    long row = std::strtol(row_part.c_str(), nullptr, 10);
-    if (row <= 0)
-        return false;
-    long col = 0;
-    for (char ch : col_part)
-    {
-        if (ch < 'A' || ch > 'Z')
-            return false;
-        col = col * 26 + (ch - 'A' + 1);
-    }
-    if (col <= 0)
-        return false;
-    row_out = row;
-    col_out = col;
-    return true;
 }
 
 fs::path version_path(const std::string &owner, const std::string &app, int version)
