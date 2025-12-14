@@ -677,7 +677,7 @@ CComPtr<IDispatch> dispatch_get(IDispatch *disp, const wchar_t *name)
     return nullptr;
 }
 
-CComPtr<IDispatch> dispatch_call_bstr(IDispatch *disp, const wchar_t *name, const std::wstring &arg)
+CComPtr<IDispatch> dispatch_call_bstr(IDispatch *disp, const wchar_t *name, const std::wstring &arg, WORD flags = DISPATCH_METHOD)
 {
     VARIANT v;
     VariantInit(&v);
@@ -685,7 +685,7 @@ CComPtr<IDispatch> dispatch_call_bstr(IDispatch *disp, const wchar_t *name, cons
     v.bstrVal = SysAllocString(arg.c_str());
     VARIANT res;
     VariantInit(&res);
-    bool ok = dispatch_invoke(disp, name, DISPATCH_METHOD, &v, 1, &res);
+    bool ok = dispatch_invoke(disp, name, flags, &v, 1, &res);
     VariantClear(&v);
     if (!ok)
         return nullptr;
@@ -1098,7 +1098,7 @@ private:
             return false;
         }
         std::wstring wrange(normalized_range.begin(), normalized_range.end());
-        CComPtr<IDispatch> rng = dispatch_call_bstr(sheet_obj, L"Range", wrange);
+        CComPtr<IDispatch> rng = dispatch_call_bstr(sheet_obj, L"Range", wrange, DISPATCH_PROPERTYGET);
         if (!rng)
         {
             err = "range not found";

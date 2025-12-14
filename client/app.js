@@ -407,7 +407,13 @@
       body: JSON.stringify({ sheet: component.sheet, range: component.cell })
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data?.error || 'Unable to read cell');
+    if (!res.ok) {
+      const error = data?.error || 'Unable to read cell';
+      if (error === 'range not found') {
+        throw new Error(`Cell ${component.sheet}!${component.cell} not found - ensure Excel file is open and cell exists`);
+      }
+      throw new Error(error);
+    }
     return data?.value ?? '';
   }
 
