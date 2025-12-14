@@ -60,6 +60,8 @@
   const devModalCancel = qs('#dev-modal-cancel');
   const bodyEl = document.body;
   const appsListEl = qs('#apps-list');
+  const appSearchInput = qs('#app-search');
+  const appOverlay = qs('#app-overlay');
   const appUiForm = qs('#app-ui-form');
   const appUiEmpty = qs('#app-ui-empty');
   const appWorkspaceTitle = qs('#app-workspace-title');
@@ -189,6 +191,9 @@
     });
   }
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && appOverlay && !appOverlay.classList.contains('hidden')) {
+      exitActiveApp();
+    }
     if (e.key === 'Escape' && devModal && !devModal.classList.contains('hidden')) {
       closeDevModal(true);
     }
@@ -201,6 +206,7 @@
   });
 
   appsListEl?.addEventListener('click', handleAppsListClick);
+  appSearchInput?.addEventListener('input', handleAppSearch);
   appRefreshBtn?.addEventListener('click', () => refreshActiveApp(true));
   appExitBtn?.addEventListener('click', () => exitActiveApp());
 
@@ -249,10 +255,21 @@
       return;
     }
     list.innerHTML = apps.map(a => {
-          const icon = renderAppIcon(a);
-          const statusMeta = a.has_ui ? 'UI ready' : 'UI not authored yet';
-          const description = formatDescription(a.description);
-          return `<button type="button" class="app-card app-card-clickable" data-launch-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}"><div class="app-card-top">${icon}<div><h4>${escapeHtml(a.name)}</h4><div class="app-meta">Owner: ${escapeHtml(a.owner)} • Version ${a.latest_version}</div></div></div><div class="app-meta">${a.public ? 'Public' : 'Restricted'} • ${statusMeta}</div><p>${escapeHtml(description)}</p></button>`;
+      const imageHtml = a.image_url 
+        ? `<img src="${escapeHtml(a.image_url)}" alt="${escapeHtml(a.name)}" class="app-card-image" />`
+        : `<div class="app-card-image" style="display: grid; place-items: center; font-size: 48px; font-weight: 700; color: var(--accent)">${escapeHtml(a.name.charAt(0).toUpperCase())}</div>`;
+      const statusMeta = a.has_ui ? '✓ UI ready' : '○ No UI yet';
+      const description = formatDescription(a.description);
+      const groupInfo = a.access_group ? ` • ${escapeHtml(a.access_group)}` : '';
+      return `<button type="button" class="app-card app-card-clickable" data-launch-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}" data-group="${escapeHtml(a.access_group || '')}">
+        ${imageHtml}
+        <div class="app-card-body">
+          <h4>${escapeHtml(a.name)}</h4>
+          <div class="app-meta">${escapeHtml(a.owner)} • v${a.latest_version}${groupInfo}</div>
+          <div class="app-meta">${a.public ? '🌐 Public' : '🔒 Restricted'} • ${statusMeta}</div>
+          <p>${escapeHtml(description)}</p>
+        </div>
+      </button>`;
     }).join('');
   }
 
@@ -263,6 +280,20 @@
       const name = launchBtn.dataset.launchApp;
       launchApp(owner, name);
     }
+  }
+
+  function handleAppSearch(e) {
+    const query = (e.target.value || '').toLowerCase().trim();
+    const cards = appsListEl?.querySelectorAll('.app-card-clickable');
+    if (!cards) return;
+    cards.forEach(card => {
+      const name = (card.dataset.launchApp || '').toLowerCase();
+      const group = (card.dataset.group || '').toLowerCase();
+      const owner = (card.dataset.owner || '').toLowerCase();
+      const text = card.textContent.toLowerCase();
+      const matches = !query || name.includes(query) || group.includes(query) || owner.includes(query) || text.includes(query);
+      card.style.display = matches ? '' : 'none';
+    });
   }
 
   function canAuthorApp(owner) {
@@ -278,6 +309,7 @@
     if (!token) return showToast('Login first', true);
     if (!owner || !name) return;
     try {
+      showAppOverlay();
       updateWorkspaceState({ title: `Launching ${name}…`, desc: 'Loading workbook and UI schema.', busy: true });
       const schema = await fetchAppSchema(owner, name);
       await ensureWorkbookLoaded(owner, name);
@@ -323,6 +355,7 @@
     if (appExitBtn) appExitBtn.disabled = true;
     if (appWorkspaceTitle) appWorkspaceTitle.textContent = 'Select an application';
     if (appWorkspaceDesc) appWorkspaceDesc.textContent = 'Launch an application to render its authored UI.';
+    hideAppOverlay();
   }
 
   async function refreshActiveApp(showToastOnError = false, notifyOnSuccess = true) {
@@ -453,6 +486,22 @@
     await closeWorkbook();
     resetWorkspace();
     showToast('Workbook session closed');
+  }
+
+  function showAppOverlay() {
+    if (appOverlay) {
+      appOverlay.classList.remove('hidden');
+      appOverlay.setAttribute('aria-hidden', 'false');
+      bodyEl.classList.add('modal-open');
+    }
+  }
+
+  function hideAppOverlay() {
+    if (appOverlay) {
+      appOverlay.classList.add('hidden');
+      appOverlay.setAttribute('aria-hidden', 'true');
+      bodyEl.classList.remove('modal-open');
+    }
   }
 
   async function fetchAppSchema(owner, name) {
