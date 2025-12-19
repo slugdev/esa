@@ -151,21 +151,24 @@
       </div>
       
       <div class="builder-main">
-        <!-- Left: Widget Tree -->
-        <div class="builder-tree-panel">
-          <div class="builder-panel-head">
-            <h4>Widget Tree</h4>
+        <!-- Left: Widget Tree + Properties -->
+        <div class="builder-left-panel">
+          <div class="builder-tree-panel">
+            <div class="builder-panel-head">
+              <h4>Widget Tree</h4>
+            </div>
+            <div class="builder-tree" id="builder-widget-tree">
+              <div id="builder-tree-root" class="tree-root"></div>
+            </div>
+            <div id="builder-empty" class="hint">Use the + dropdown to add widgets.</div>
           </div>
-          <div class="builder-tree" id="builder-widget-tree">
-            <div id="builder-tree-root" class="tree-root"></div>
-          </div>
-          <div id="builder-empty" class="hint">Drag widgets from the palette or click to add them to the tree.</div>
-        </div>
-        
-        <!-- Right: Property Editor -->
-        <div class="builder-properties">
-          <h4 class="properties-title">Properties</h4>
-          <div id="builder-no-selection" class="hint">Select a widget to edit its properties.</div>
+          
+          <div class="builder-sash" id="builder-sash"></div>
+          
+          <!-- Property Editor -->
+          <div class="builder-properties">
+            <h4 class="properties-title">Properties</h4>
+            <div id="builder-no-selection" class="hint">Select a widget to edit its properties.</div>
           
           <!-- Application Settings Form -->
           <form id="builder-app-form" class="builder-form hidden">
@@ -311,10 +314,22 @@
             </div>
           </form>
         </div>
+        </div>
+        
+        <!-- Right: UI Preview -->
+        <div class="builder-preview-panel">
+          <div class="builder-panel-head">
+            <h4>UI Preview</h4>
+          </div>
+          <div class="builder-preview" id="builder-preview">
+            <div id="builder-preview-empty" class="hint">Add widgets to see a live preview.</div>
+            <div id="builder-preview-content" class="preview-content"></div>
+          </div>
+        </div>
       </div>
       
       <div class="app-overlay-footer">
-        <div class="hint" style="margin: 0;">Drag widgets from the palette to the tree. Configure properties on the right. Press Escape to close.</div>
+        <div class="hint" style="margin: 0;">Configure widgets on the left. Preview updates automatically. Press Escape to close.</div>
       </div>
     </div>
   </div>

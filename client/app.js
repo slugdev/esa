@@ -118,6 +118,12 @@
   const builderEmpty = qs('#builder-empty');
   const builderNoSelection = qs('#builder-no-selection');
   const builderPropertyForm = qs('#builder-property-form');
+  const builderSash = qs('#builder-sash');
+  const builderTreePanel = qs('.builder-tree-panel');
+  const builderPropertiesPanel = qs('.builder-properties');
+  const builderPreview = qs('#builder-preview');
+  const builderPreviewContent = qs('#builder-preview-content');
+  const builderPreviewEmpty = qs('#builder-preview-empty');
   // Property form elements
   const propWidgetId = qs('#prop-widget-id');
   const propName = qs('#prop-name');
@@ -315,6 +321,53 @@
   propDeleteApp?.addEventListener('click', handleDeleteApp);
   builderSaveLayoutBtn?.addEventListener('click', () => saveBuilderLayout());
   
+  // Sash resize functionality
+  if (builderSash && builderTreePanel && builderPropertiesPanel) {
+    let isDragging = false;
+    let startY = 0;
+    let startTreeHeight = 0;
+    
+    builderSash.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      startY = e.clientY;
+      startTreeHeight = builderTreePanel.offsetHeight;
+      builderSash.classList.add('dragging');
+      document.body.style.cursor = 'ns-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const deltaY = e.clientY - startY;
+      const newHeight = Math.max(80, Math.min(startTreeHeight + deltaY, window.innerHeight * 0.6));
+      builderTreePanel.style.flex = 'none';
+      builderTreePanel.style.height = `${newHeight}px`;
+    });
+    
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        builderSash.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    });
+  }
+
+  // Preview click to select widgets
+  builderPreviewContent?.addEventListener('click', (e) => {
+    const previewEl = e.target.closest('[data-preview-id]');
+    if (!previewEl) return;
+    const widgetId = previewEl.dataset.previewId;
+    if (widgetId && widgetId !== builderSelectedWidget) {
+      builderSelectedWidget = widgetId;
+      renderWidgetTree();
+      const widget = findWidgetById(builderWidgets, widgetId);
+      if (widget) showPropertyForm(widget);
+    }
+  });
+
   appUiForm?.addEventListener('change', handleAppFormChange);
   appUiForm?.addEventListener('submit', (e) => e.preventDefault());
 
@@ -1118,6 +1171,9 @@
         </div>
       </div>
     `;
+    
+    // Update live preview
+    renderBuilderPreview();
   }
 
   let builderAppCollapsed = false;
@@ -1159,6 +1215,116 @@
       </div>
       ${childrenHtml}
     </div>`;
+  }
+
+  // Live preview rendering
+  function renderBuilderPreview() {
+    if (!builderPreviewContent || !builderPreviewEmpty) return;
+    
+    if (!builderWidgets || !builderWidgets.length) {
+      builderPreviewContent.innerHTML = '';
+      builderPreviewEmpty.classList.remove('hidden');
+      return;
+    }
+    
+    builderPreviewEmpty.classList.add('hidden');
+    builderPreviewContent.innerHTML = builderWidgets.map(w => renderPreviewWidget(w)).join('');
+  }
+
+  function renderPreviewWidget(widget) {
+    const def = WIDGET_TYPES[widget.type] || { icon: '❓', label: widget.type };
+    const props = widget.properties || {};
+    const label = escapeHtml(props.label || widget.name || def.label);
+    const selected = builderSelectedWidget === widget.id;
+    const selectedClass = selected ? ' selected' : '';
+    
+    // Container widgets
+    if (def.isContainer) {
+      const childrenHtml = widget.children?.length 
+        ? widget.children.map(c => renderPreviewWidget(c)).join('') 
+        : '<div class="preview-empty-container">(empty)</div>';
+      
+      // Determine layout direction
+      let layoutClass = '';
+      let gridStyle = '';
+      if (widget.type === 'boxsizer-h') {
+        layoutClass = ' horizontal';
+      } else if (widget.type === 'gridsizer') {
+        layoutClass = ' grid';
+        const cols = props.cols || 2;
+        gridStyle = ` style="grid-template-columns: repeat(${cols}, 1fr);"`;
+      }
+      
+      return `<div class="preview-container${selectedClass}" data-preview-id="${widget.id}">
+        <div class="preview-container-label">${def.icon} ${label}</div>
+        <div class="preview-container-children${layoutClass}"${gridStyle}>
+          ${childrenHtml}
+        </div>
+      </div>`;
+    }
+    
+    // Non-container widgets - render as interactive controls
+    const controlHtml = renderPreviewControl(widget, def, props, label);
+    
+    return `<div class="preview-widget${selectedClass}" data-preview-id="${widget.id}">
+      ${props.label ? `<div class="preview-widget-label">${label}</div>` : ''}
+      <div class="preview-widget-control">${controlHtml}</div>
+    </div>`;
+  }
+
+  function renderPreviewControl(widget, def, props, label) {
+    const placeholder = escapeHtml(props.placeholder || '');
+    const options = (props.options || '').split(',').map(o => o.trim()).filter(Boolean);
+    
+    switch (widget.type) {
+      case 'textinput':
+        return `<input type="text" placeholder="${placeholder || label}" disabled>`;
+      case 'number':
+      case 'spinctrl':
+        return `<input type="number" value="${props.min || 0}" min="${props.min || 0}" max="${props.max || 100}" disabled>`;
+      case 'textarea':
+        return `<textarea rows="3" placeholder="${placeholder}" disabled></textarea>`;
+      case 'dropdown':
+        const opts = options.length ? options : ['Option 1', 'Option 2'];
+        return `<select disabled>${opts.map(o => `<option>${escapeHtml(o)}</option>`).join('')}</select>`;
+      case 'checkbox':
+        return `<label style="display: flex; align-items: center; gap: 6px;"><input type="checkbox" disabled> ${label}</label>`;
+      case 'radio':
+        const radioOpts = options.length ? options : ['Option 1', 'Option 2'];
+        return radioOpts.map(o => `<label style="display: flex; align-items: center; gap: 4px; margin: 2px 0;"><input type="radio" name="${widget.id}" disabled> ${escapeHtml(o)}</label>`).join('');
+      case 'slider':
+        return `<input type="range" min="${props.min || 0}" max="${props.max || 100}" value="${(props.min || 0) + ((props.max || 100) - (props.min || 0)) / 2}" disabled>`;
+      case 'datepicker':
+        return `<input type="date" disabled>`;
+      case 'colorpicker':
+        return `<input type="color" value="#5ab3ff" disabled>`;
+      case 'button':
+        return `<button type="button">${label}</button>`;
+      case 'togglebtn':
+        return `<button type="button" style="opacity: 0.7;">${label}</button>`;
+      case 'link':
+        return `<a href="#" style="color: var(--accent);">${label}</a>`;
+      case 'label':
+        return `<span style="font-size: 13px;">${label}</span>`;
+      case 'output':
+        return `<span style="font-family: monospace; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px;">...</span>`;
+      case 'image':
+        return `<div style="width: 100%; height: 80px; background: rgba(90,179,255,0.1); border-radius: 4px; display: flex; align-items: center; justify-content: center;">🖼️ Image</div>`;
+      case 'gauge':
+        return `<progress value="${props.min || 30}" max="${props.max || 100}" style="width: 100%;"></progress>`;
+      case 'separator':
+        return `<hr style="border: none; border-top: 1px solid rgba(90,179,255,0.3); margin: 8px 0;">`;
+      case 'spacer':
+        return `<div style="height: 20px;"></div>`;
+      case 'datagrid':
+        return `<div style="padding: 12px; background: rgba(0,0,0,0.2); border-radius: 4px; text-align: center;">📊 DataGrid</div>`;
+      case 'chart':
+        return `<div style="padding: 20px; background: rgba(0,0,0,0.2); border-radius: 4px; text-align: center;">📈 Chart</div>`;
+      case 'formula':
+        return `<span style="font-family: monospace;">∑ Formula Result</span>`;
+      default:
+        return `<span>${def.icon} ${label}</span>`;
+    }
   }
 
   function getDefaultProperties(type) {
