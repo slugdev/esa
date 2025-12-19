@@ -672,8 +672,11 @@
   }
 
   function setupNotebookTabHandlers() {
-    appUiForm.querySelectorAll('.app-tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+    const tabBtns = appUiForm.querySelectorAll('.app-tab-btn');
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const target = btn.dataset.tabTarget;
         // Find the parent notebook
         const notebook = btn.closest('.widget-notebook');
