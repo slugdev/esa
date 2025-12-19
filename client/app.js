@@ -119,8 +119,12 @@
   const builderNoSelection = qs('#builder-no-selection');
   const builderPropertyForm = qs('#builder-property-form');
   const builderSash = qs('#builder-sash');
+  const builderHsash = qs('#builder-hsash');
+  const builderLeftPanel = qs('.builder-left-panel');
   const builderTreePanel = qs('.builder-tree-panel');
   const builderPropertiesPanel = qs('.builder-properties');
+  const builderPreviewPanel = qs('.builder-preview-panel');
+  const builderMain = qs('.builder-main');
   const builderPreview = qs('#builder-preview');
   const builderPreviewContent = qs('#builder-preview-content');
   const builderPreviewEmpty = qs('#builder-preview-empty');
@@ -349,6 +353,39 @@
       if (isDragging) {
         isDragging = false;
         builderSash.classList.remove('dragging');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    });
+  }
+
+  // Horizontal sash resize functionality (between left panel and preview)
+  if (builderHsash && builderLeftPanel && builderMain) {
+    let isDraggingH = false;
+    let startX = 0;
+    let startLeftWidth = 0;
+    
+    builderHsash.addEventListener('mousedown', (e) => {
+      isDraggingH = true;
+      startX = e.clientX;
+      startLeftWidth = builderLeftPanel.offsetWidth;
+      builderHsash.classList.add('dragging');
+      document.body.style.cursor = 'ew-resize';
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      if (!isDraggingH) return;
+      const deltaX = e.clientX - startX;
+      const newWidth = Math.max(250, Math.min(startLeftWidth + deltaX, window.innerWidth * 0.5));
+      builderMain.style.gridTemplateColumns = `${newWidth}px 6px 1fr`;
+    });
+    
+    document.addEventListener('mouseup', () => {
+      if (isDraggingH) {
+        isDraggingH = false;
+        builderHsash.classList.remove('dragging');
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
       }
@@ -1185,7 +1222,7 @@
     const collapsed = widget.collapsed || false;
     const selected = builderSelectedWidget === widget.id;
     
-    const indent = depth * 16;
+    const indent = depth * 10;
     const childrenHtml = isContainer && hasChildren && !collapsed
       ? `<div class="tree-children">${widget.children.map(c => renderWidgetNode(c, depth + 1)).join('')}</div>`
       : '';
