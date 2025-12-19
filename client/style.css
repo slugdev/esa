@@ -702,78 +702,12 @@ input[type="file"] { padding: 8px; }
 
 .builder-main {
   display: grid;
-  grid-template-columns: 200px 1fr 320px;
+  grid-template-columns: 1fr 360px;
   gap: 12px;
   flex: 1;
   overflow: hidden;
   padding: 12px;
   min-height: 0;
-}
-
-/* Widget Palette */
-.builder-palette {
-  background: rgba(14, 26, 48, 0.95);
-  border: 1px solid rgba(90, 179, 255, 0.2);
-  border-radius: 10px;
-  overflow-y: auto;
-  padding: 12px;
-}
-
-.palette-title {
-  margin: 0 0 12px 0;
-  font-size: 13px;
-  color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.palette-section {
-  margin-bottom: 16px;
-}
-
-.palette-section-title {
-  font-size: 11px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid rgba(90, 179, 255, 0.15);
-}
-
-.palette-widgets {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-}
-
-.palette-widget {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 8px 4px;
-  background: rgba(90, 179, 255, 0.05);
-  border: 1px solid rgba(90, 179, 255, 0.15);
-  border-radius: 6px;
-  color: var(--text);
-  cursor: pointer;
-  font-size: 10px;
-  transition: all 0.15s;
-}
-
-.palette-widget:hover {
-  background: rgba(90, 179, 255, 0.15);
-  border-color: var(--accent);
-  transform: translateY(-1px);
-}
-
-.palette-widget:active {
-  transform: translateY(0);
-}
-
-.palette-widget .widget-icon {
-  font-size: 16px;
 }
 
 /* Widget Tree Panel */
@@ -836,14 +770,39 @@ input[type="file"] { padding: 8px; }
 
 /* Application root node styling */
 .tree-app-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  margin: 2px 0;
+  border-radius: 6px;
+  cursor: pointer;
   background: rgba(90, 179, 255, 0.05);
   border: 1px solid rgba(90, 179, 255, 0.2);
   font-weight: 600;
+  transition: all 0.15s;
+}
+
+.tree-app-node:hover {
+  background: rgba(90, 179, 255, 0.1);
+}
+
+.tree-app-node.selected {
+  background: rgba(90, 179, 255, 0.15);
+  border-color: var(--accent);
 }
 
 .tree-app-node .widget-type {
   background: rgba(90, 179, 255, 0.2);
   color: var(--accent);
+}
+
+.tree-app-node .widget-name {
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tree-widget-node .widget-icon {
@@ -929,6 +888,71 @@ input[type="file"] { padding: 8px; }
 .tree-widget-actions button:hover {
   background: rgba(90, 179, 255, 0.2);
   color: var(--accent);
+}
+
+.tree-delete-btn {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid rgba(255, 100, 100, 0.3);
+  color: rgba(255, 100, 100, 0.7);
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1;
+  transition: all 0.15s;
+}
+
+.tree-delete-btn:hover {
+  background: rgba(255, 80, 80, 0.2);
+  border-color: rgba(255, 80, 80, 0.6);
+  color: #ff6464;
+}
+
+.tree-add-widget {
+  background: rgba(6, 13, 26, 0.95);
+  border: 1px solid rgba(90, 179, 255, 0.3);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 11px;
+  cursor: pointer;
+  min-width: 60px;
+  max-width: 100px;
+}
+
+.tree-add-widget option {
+  background: #0a1628;
+  color: var(--text);
+  padding: 4px 8px;
+}
+
+.tree-add-widget:hover {
+  border-color: var(--accent);
+  background: rgba(90, 179, 255, 0.1);
+}
+
+.tree-add-widget:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.tree-node-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.tree-widget-node:hover > .tree-node-actions,
+.tree-app-node:hover > .tree-node-actions {
+  opacity: 1;
 }
 
 /* Property Editor */
@@ -1043,28 +1067,6 @@ input[type="file"] { padding: 8px; }
 @media (max-width: 900px) {
   .builder-main {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto;
-  }
-  
-  .builder-palette {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 8px;
-  }
-  
-  .palette-section {
-    margin: 0;
-  }
-  
-  .palette-widgets {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-  
-  .palette-widget {
-    flex-direction: row;
-    padding: 6px 10px;
+    grid-template-rows: 1fr auto;
   }
 }

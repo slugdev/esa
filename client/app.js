@@ -118,7 +118,6 @@
   const builderEmpty = qs('#builder-empty');
   const builderNoSelection = qs('#builder-no-selection');
   const builderPropertyForm = qs('#builder-property-form');
-  const builderPalette = qs('.builder-palette');
   // Property form elements
   const propWidgetId = qs('#prop-widget-id');
   const propName = qs('#prop-name');
@@ -306,8 +305,9 @@
   }
   
   // New builder event listeners
-  builderPalette?.addEventListener('click', handlePaletteClick);
+
   builderTreeRoot?.addEventListener('click', handleWidgetTreeClick);
+  builderTreeRoot?.addEventListener('change', handleAddWidgetDropdown);
   builderPropertyForm?.addEventListener('submit', handlePropertyFormSubmit);
   builderAppForm?.addEventListener('submit', handleAppFormSubmit);
   propExcelEnabled?.addEventListener('change', handleExcelToggle);
@@ -1049,6 +1049,38 @@
     return 'w-' + Math.random().toString(36).slice(2, 9);
   }
 
+  // Get valid child widget types for a given parent type
+  function getValidChildWidgets(parentType) {
+    // All widget types can be added to the app root or containers
+    const allWidgets = Object.entries(WIDGET_TYPES).map(([key, def]) => ({
+      type: key,
+      icon: def.icon,
+      label: def.label,
+      category: def.category
+    }));
+    
+    // Non-container widgets cannot have children
+    if (parentType && !WIDGET_TYPES[parentType]?.isContainer) {
+      return [];
+    }
+    
+    return allWidgets;
+  }
+
+  function renderAddWidgetDropdown(parentId, parentType) {
+    const validWidgets = getValidChildWidgets(parentType);
+    if (!validWidgets.length) return '';
+    
+    const optionsHtml = validWidgets.map(w => 
+      `<option value="${w.type}">${w.icon} ${w.label}</option>`
+    ).join('');
+    
+    return `<select class="tree-add-widget" data-parent-id="${parentId}" title="Add child widget">
+      <option value="">+</option>
+      ${optionsHtml}
+    </select>`;
+  }
+
   function renderWidgetTree() {
     if (!builderTreeRoot) return;
     
@@ -1061,8 +1093,11 @@
     
     const widgetsHtml = builderWidgets.map(w => renderWidgetNode(w, 1)).join('');
     const emptyHint = !builderWidgets.length 
-      ? '<div class="tree-empty-hint" style="padding-left: 24px; opacity: 0.6; font-size: 12px; margin: 8px 0;">Click a widget in the palette to add it here.</div>' 
+      ? '<div class="tree-empty-hint" style="padding-left: 24px; opacity: 0.6; font-size: 12px; margin: 8px 0;">Use the + dropdown to add widgets.</div>' 
       : '';
+    
+    // App root can have any widgets added to it
+    const appAddDropdown = renderAddWidgetDropdown('app-root', null);
     
     builderTreeRoot.innerHTML = `
       <div class="tree-widget-group tree-app-root">
@@ -1073,6 +1108,9 @@
           <span class="widget-icon">📦</span>
           <span class="widget-name">${escapeHtml(appName)}</span>
           <span class="widget-type">Application</span>
+          <div class="tree-node-actions">
+            ${appAddDropdown}
+          </div>
         </div>
         <div class="tree-children ${appCollapsed ? 'hidden' : ''}">
           ${widgetsHtml}
@@ -1102,6 +1140,10 @@
          </button>`
       : '<span class="tree-expand-spacer"></span>';
     
+    // Add dropdown for containers, delete button for all widgets
+    const addDropdown = isContainer ? renderAddWidgetDropdown(widget.id, widget.type) : '';
+    const deleteBtn = `<button type="button" class="tree-delete-btn" data-delete-widget="${widget.id}" title="Delete widget">×</button>`;
+    
     return `<div class="tree-widget-group">
       <div class="tree-widget-node ${selected ? 'selected' : ''}" 
            data-widget-id="${widget.id}" 
@@ -1110,46 +1152,13 @@
         <span class="widget-icon">${def.icon}</span>
         <span class="widget-name">${escapeHtml(widget.name || def.label)}</span>
         <span class="widget-type">${escapeHtml(def.label)}</span>
+        <div class="tree-node-actions">
+          ${addDropdown}
+          ${deleteBtn}
+        </div>
       </div>
       ${childrenHtml}
     </div>`;
-  }
-
-  function handlePaletteClick(e) {
-    const btn = e.target.closest('.palette-widget');
-    if (!btn) return;
-    
-    const widgetType = btn.dataset.widget;
-    if (!widgetType || !WIDGET_TYPES[widgetType]) return;
-    
-    const def = WIDGET_TYPES[widgetType];
-    const newWidget = {
-      id: createWidgetId(),
-      type: widgetType,
-      name: def.label,
-      properties: getDefaultProperties(widgetType),
-      excel: { enabled: false, sheet: '', cell: '', mode: 'bidirectional' },
-      children: []
-    };
-    
-    // If a container widget is selected, add as child; 
-    // if app-root or nothing is selected, add to root
-    if (builderSelectedWidget && builderSelectedWidget !== 'app-root') {
-      const parent = findWidgetById(builderWidgets, builderSelectedWidget);
-      if (parent && WIDGET_TYPES[parent.type]?.isContainer) {
-        parent.children = parent.children || [];
-        parent.children.push(newWidget);
-      } else {
-        builderWidgets.push(newWidget);
-      }
-    } else {
-      builderWidgets.push(newWidget);
-    }
-    
-    // Select the new widget
-    builderSelectedWidget = newWidget.id;
-    renderWidgetTree();
-    showPropertyForm(newWidget);
   }
 
   function getDefaultProperties(type) {
@@ -1219,7 +1228,26 @@
       return;
     }
     
-    // Select widget or app node
+    // Handle delete button click
+    const deleteBtn = e.target.closest('[data-delete-widget]');
+    if (deleteBtn) {
+      e.stopPropagation();
+      const widgetId = deleteBtn.dataset.deleteWidget;
+      if (confirm('Delete this widget and all its children?')) {
+        removeWidgetById(builderWidgets, widgetId);
+        if (builderSelectedWidget === widgetId) {
+          builderSelectedWidget = null;
+          hidePropertyForm();
+        }
+        renderWidgetTree();
+        showToast('Widget deleted');
+      }
+      return;
+    }
+    
+    // Select widget or app node (but not if clicking on actions)
+    if (e.target.closest('.tree-node-actions')) return;
+    
     const node = e.target.closest('.tree-widget-node');
     if (node) {
       const widgetId = node.dataset.widgetId;
@@ -1233,6 +1261,48 @@
         if (widget) showPropertyForm(widget);
       }
     }
+  }
+
+  // Handle add widget dropdown change
+  function handleAddWidgetDropdown(e) {
+    const select = e.target.closest('.tree-add-widget');
+    if (!select) return;
+    
+    const widgetType = select.value;
+    if (!widgetType || !WIDGET_TYPES[widgetType]) {
+      select.value = '';
+      return;
+    }
+    
+    const parentId = select.dataset.parentId;
+    const def = WIDGET_TYPES[widgetType];
+    
+    const newWidget = {
+      id: createWidgetId(),
+      type: widgetType,
+      name: def.label,
+      properties: getDefaultProperties(widgetType),
+      excel: { enabled: false, sheet: '', cell: '', mode: 'bidirectional' },
+      children: []
+    };
+    
+    if (parentId === 'app-root') {
+      builderWidgets.push(newWidget);
+    } else {
+      const parent = findWidgetById(builderWidgets, parentId);
+      if (parent && WIDGET_TYPES[parent.type]?.isContainer) {
+        parent.children = parent.children || [];
+        parent.children.push(newWidget);
+      }
+    }
+    
+    // Select the new widget
+    builderSelectedWidget = newWidget.id;
+    renderWidgetTree();
+    showPropertyForm(newWidget);
+    
+    // Reset dropdown
+    select.value = '';
   }
 
   async function showAppPropertyForm() {
