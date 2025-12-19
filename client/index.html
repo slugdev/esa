@@ -137,106 +137,280 @@
   </div>
 
   <div id="ui-builder-modal" class="app-overlay hidden" aria-hidden="true">
-    <div class="app-overlay-content">
+    <div class="app-overlay-content builder-layout">
       <div class="app-overlay-header">
         <div>
           <h3 id="ui-builder-title">UI Builder</h3>
           <span id="builder-app-label" class="pill" style="margin-left: 12px;">No app</span>
         </div>
-        <button type="button" id="ui-builder-close" class="ghost">Close Builder</button>
-      </div>
-      <div class="app-overlay-body" style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px; padding: 18px;">
-        <div class="builder-panel">
-          <div class="builder-panel-head">
-            <h4>Application Tree</h4>
-            <button type="button" id="builder-add-tab" class="btn-small">+ Add Tab</button>
-          </div>
-          <div class="builder-tree">
-            <div class="tree-root">
-              <div class="tree-node tree-root-node">
-                <span class="tree-icon">📋</span>
-                <span id="builder-tree-app-name">Application</span>
-              </div>
-              <div class="tree-children" style="margin-left: 20px;">
-                <div class="tree-node tree-section-node">
-                  <span class="tree-icon">📊</span>
-                  <span>UI</span>
-                </div>
-                <div id="builder-tabs-tree" class="tree-children" style="margin-left: 40px;"></div>
-              </div>
-            </div>
-          </div>
-          <div id="builder-empty" class="hint">No tabs yet. Add a tab to start building your UI.</div>
+        <div class="builder-header-actions">
+          <button type="button" id="builder-preview-btn" class="ghost">Preview</button>
+          <button type="button" id="builder-save-layout" class="btn-small">Save Layout</button>
+          <button type="button" id="ui-builder-close" class="ghost">Close</button>
         </div>
-        <div class="builder-panel">
-          <h4 class="builder-panel-head">Editor</h4>
-          <div id="builder-tab-editor" class="hidden">
-            <form id="builder-tab-form" class="builder-form">
-              <input type="hidden" id="builder-tab-id">
-              <label>Tab Name
-                <input id="builder-tab-name" required placeholder="e.g., Dashboard, Settings">
-              </label>
-              <div class="actions">
-                <button type="submit">Save Tab</button>
-                <button type="button" id="builder-tab-cancel" class="ghost">Cancel</button>
-              </div>
-            </form>
+      </div>
+      
+      <div class="builder-main">
+        <!-- Left: Widget Palette -->
+        <div class="builder-palette">
+          <h4 class="palette-title">Widget Palette</h4>
+          
+          <div class="palette-section">
+            <div class="palette-section-title">Containers</div>
+            <div class="palette-widgets">
+              <button type="button" class="palette-widget" data-widget="panel" title="Panel container">
+                <span class="widget-icon">📦</span><span>Panel</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="notebook" title="Tabbed notebook">
+                <span class="widget-icon">📑</span><span>Notebook</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="boxsizer-v" title="Vertical layout">
+                <span class="widget-icon">⬇️</span><span>VBox</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="boxsizer-h" title="Horizontal layout">
+                <span class="widget-icon">➡️</span><span>HBox</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="gridsizer" title="Grid layout">
+                <span class="widget-icon">▦</span><span>Grid</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="scrolled" title="Scrollable area">
+                <span class="widget-icon">📜</span><span>Scroll</span>
+              </button>
+            </div>
           </div>
-          <div id="builder-component-editor" class="hidden">
-            <form id="builder-form" class="builder-form">
-              <input type="hidden" name="component_id" id="builder-component-id">
-              <label>Tab
-                <select id="builder-component-tab" required>
-                  <option value="">Select a tab...</option>
-                </select>
-              </label>
-              <label>Label
-                <input name="label" id="builder-label" required>
-              </label>
-            <div class="two-col">
-              <label>Sheet
-                <select name="sheet" id="builder-sheet" required>
-                  <option value="">Loading sheets…</option>
-                </select>
-              </label>
-              <label>Cell / Range <input name="cell" id="builder-cell" placeholder="A1" required></label>
+          
+          <div class="palette-section">
+            <div class="palette-section-title">Inputs</div>
+            <div class="palette-widgets">
+              <button type="button" class="palette-widget" data-widget="textinput" title="Text input">
+                <span class="widget-icon">📝</span><span>Text</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="number" title="Number input">
+                <span class="widget-icon">🔢</span><span>Number</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="textarea" title="Multi-line text">
+                <span class="widget-icon">📄</span><span>TextArea</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="dropdown" title="Dropdown select">
+                <span class="widget-icon">📋</span><span>Dropdown</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="checkbox" title="Checkbox">
+                <span class="widget-icon">☑️</span><span>Check</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="radio" title="Radio buttons">
+                <span class="widget-icon">🔘</span><span>Radio</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="slider" title="Slider control">
+                <span class="widget-icon">🎚️</span><span>Slider</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="spinctrl" title="Spin control">
+                <span class="widget-icon">🔄</span><span>Spin</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="datepicker" title="Date picker">
+                <span class="widget-icon">📅</span><span>Date</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="colorpicker" title="Color picker">
+                <span class="widget-icon">🎨</span><span>Color</span>
+              </button>
             </div>
-            <label>Component Type
-              <select name="componentType" id="builder-component-type">
-                <option value="text">Text Input</option>
-                <option value="number">Number Input</option>
-                <option value="textarea">Text Area</option>
-                <option value="dropdown">Dropdown</option>
-                <option value="slider">Slider</option>
-                <option value="checkbox">Checkbox</option>
-                <option value="display">Display (read-only)</option>
-              </select>
-            </label>
-            <div id="builder-options-section" class="hidden">
-              <label>Options (comma-separated)
-                <input name="options" id="builder-options" placeholder="Option1, Option2, Option3">
-                <span class="hint">For dropdowns: enter comma-separated values</span>
-              </label>
+          </div>
+          
+          <div class="palette-section">
+            <div class="palette-section-title">Display</div>
+            <div class="palette-widgets">
+              <button type="button" class="palette-widget" data-widget="label" title="Static text">
+                <span class="widget-icon">🏷️</span><span>Label</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="output" title="Dynamic output">
+                <span class="widget-icon">👁️</span><span>Output</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="image" title="Image display">
+                <span class="widget-icon">🖼️</span><span>Image</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="gauge" title="Progress gauge">
+                <span class="widget-icon">📊</span><span>Gauge</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="separator" title="Separator line">
+                <span class="widget-icon">➖</span><span>Line</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="spacer" title="Empty spacer">
+                <span class="widget-icon">⬜</span><span>Spacer</span>
+              </button>
             </div>
-            <div id="builder-range-section" class="hidden">
+          </div>
+          
+          <div class="palette-section">
+            <div class="palette-section-title">Actions</div>
+            <div class="palette-widgets">
+              <button type="button" class="palette-widget" data-widget="button" title="Action button">
+                <span class="widget-icon">🔘</span><span>Button</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="togglebtn" title="Toggle button">
+                <span class="widget-icon">🔀</span><span>Toggle</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="link" title="Hyperlink">
+                <span class="widget-icon">🔗</span><span>Link</span>
+              </button>
+            </div>
+          </div>
+          
+          <div class="palette-section">
+            <div class="palette-section-title">Data (Excel)</div>
+            <div class="palette-widgets">
+              <button type="button" class="palette-widget" data-widget="datagrid" title="Cell range grid">
+                <span class="widget-icon">📊</span><span>DataGrid</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="chart" title="Excel chart">
+                <span class="widget-icon">📈</span><span>Chart</span>
+              </button>
+              <button type="button" class="palette-widget" data-widget="formula" title="Formula output">
+                <span class="widget-icon">∑</span><span>Formula</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Center: Widget Tree -->
+        <div class="builder-tree-panel">
+          <div class="builder-panel-head">
+            <h4>Widget Tree</h4>
+          </div>
+          <div class="builder-tree" id="builder-widget-tree">
+            <div id="builder-tree-root" class="tree-root"></div>
+          </div>
+          <div id="builder-empty" class="hint">Drag widgets from the palette or click to add them to the tree.</div>
+        </div>
+        
+        <!-- Right: Property Editor -->
+        <div class="builder-properties">
+          <h4 class="properties-title">Properties</h4>
+          <div id="builder-no-selection" class="hint">Select a widget to edit its properties.</div>
+          
+          <form id="builder-property-form" class="builder-form hidden">
+            <input type="hidden" id="prop-widget-id">
+            
+            <!-- Common Properties -->
+            <fieldset class="prop-group">
+              <legend>Widget</legend>
+              <label>Name <input type="text" id="prop-name" placeholder="widgetName"></label>
+              <label>Type <input type="text" id="prop-type" readonly class="readonly"></label>
+            </fieldset>
+            
+            <fieldset class="prop-group" id="prop-group-label">
+              <legend>Content</legend>
+              <label>Label / Text <input type="text" id="prop-label" placeholder="Widget label"></label>
+              <label id="prop-placeholder-row">Placeholder <input type="text" id="prop-placeholder"></label>
+              <label id="prop-tooltip-row">Tooltip <input type="text" id="prop-tooltip"></label>
+            </fieldset>
+            
+            <fieldset class="prop-group">
+              <legend>Layout</legend>
               <div class="two-col">
-                <label>Min Value <input type="number" name="min" id="builder-min" value="0"></label>
-                <label>Max Value <input type="number" name="max" id="builder-max" value="100"></label>
+                <label>Width <input type="text" id="prop-width" placeholder="auto"></label>
+                <label>Height <input type="text" id="prop-height" placeholder="auto"></label>
               </div>
-              <label>Step <input type="number" name="step" id="builder-step" value="1"></label>
-            </div>
-            <div class="actions">
-              <button type="submit" id="builder-save-component">Save Component</button>
-              <button type="button" id="builder-reset" class="ghost">Clear Selection</button>
+              <div class="two-col">
+                <label>Min Width <input type="text" id="prop-min-width" placeholder="0"></label>
+                <label>Min Height <input type="text" id="prop-min-height" placeholder="0"></label>
+              </div>
+              <label>Proportion <input type="number" id="prop-proportion" min="0" value="0" title="Grow factor in sizer"></label>
+              <label>Flags
+                <select id="prop-flags" multiple size="3">
+                  <option value="expand">Expand</option>
+                  <option value="align-left">Align Left</option>
+                  <option value="align-center">Align Center</option>
+                  <option value="align-right">Align Right</option>
+                </select>
+              </label>
+              <div class="two-col">
+                <label>Margin <input type="number" id="prop-margin" min="0" value="4"></label>
+                <label>Padding <input type="number" id="prop-padding" min="0" value="0"></label>
+              </div>
+            </fieldset>
+            
+            <!-- Sizer Properties -->
+            <fieldset class="prop-group" id="prop-group-sizer">
+              <legend>Sizer Options</legend>
+              <label>Orientation
+                <select id="prop-orientation">
+                  <option value="vertical">Vertical</option>
+                  <option value="horizontal">Horizontal</option>
+                </select>
+              </label>
+              <div class="two-col" id="prop-grid-options">
+                <label>Columns <input type="number" id="prop-cols" min="1" value="2"></label>
+                <label>Rows <input type="number" id="prop-rows" min="0" value="0" placeholder="auto"></label>
+              </div>
+              <div class="two-col">
+                <label>H Gap <input type="number" id="prop-hgap" min="0" value="4"></label>
+                <label>V Gap <input type="number" id="prop-vgap" min="0" value="4"></label>
+              </div>
+            </fieldset>
+            
+            <!-- Input Properties -->
+            <fieldset class="prop-group" id="prop-group-input">
+              <legend>Input Options</legend>
+              <label id="prop-options-row">Options (comma-separated)
+                <input type="text" id="prop-options" placeholder="Option1, Option2">
+              </label>
+              <div class="two-col" id="prop-range-options">
+                <label>Min <input type="number" id="prop-min" value="0"></label>
+                <label>Max <input type="number" id="prop-max" value="100"></label>
+              </div>
+              <label id="prop-step-row">Step <input type="number" id="prop-step" value="1"></label>
+              <label id="prop-default-row">Default Value <input type="text" id="prop-default"></label>
+            </fieldset>
+            
+            <!-- Excel Binding (Optional) -->
+            <fieldset class="prop-group" id="prop-group-excel">
+              <legend>
+                <label class="checkbox inline">
+                  <input type="checkbox" id="prop-excel-enabled"> Excel Binding
+                </label>
+              </legend>
+              <div id="prop-excel-fields" class="hidden">
+                <label>Sheet
+                  <select id="prop-sheet">
+                    <option value="">Select sheet...</option>
+                  </select>
+                </label>
+                <label>Cell / Range <input type="text" id="prop-cell" placeholder="A1 or A1:C10"></label>
+                <label>Mode
+                  <select id="prop-mode">
+                    <option value="input">Input (push to Excel)</option>
+                    <option value="output">Output (read from Excel)</option>
+                    <option value="bidirectional">Bidirectional</option>
+                  </select>
+                </label>
+              </div>
+            </fieldset>
+            
+            <!-- Button/Action Properties -->
+            <fieldset class="prop-group" id="prop-group-action">
+              <legend>Action</legend>
+              <label>On Click
+                <select id="prop-onclick">
+                  <option value="">None</option>
+                  <option value="refresh">Refresh Data</option>
+                  <option value="submit">Submit Values</option>
+                  <option value="recalc">Recalculate</option>
+                  <option value="navigate">Navigate to Tab</option>
+                  <option value="custom">Custom Script</option>
+                </select>
+              </label>
+              <label id="prop-target-row">Target <input type="text" id="prop-target" placeholder="Target tab or action"></label>
+            </fieldset>
+            
+            <div class="prop-actions">
+              <button type="submit" class="btn-small">Apply</button>
+              <button type="button" id="prop-delete-widget" class="ghost btn-small danger">Delete</button>
             </div>
           </form>
         </div>
       </div>
+      
       <div class="app-overlay-footer">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div class="hint" style="margin: 0;">Configure components and map them to Excel cells. Click "Save Layout" when done.</div>
-          <button type="button" id="builder-save-layout">Save Layout</button>
-        </div>
+        <div class="hint" style="margin: 0;">Drag widgets from the palette to the tree. Configure properties on the right. Press Escape to close.</div>
       </div>
     </div>
   </div>

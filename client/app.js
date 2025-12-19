@@ -11,11 +11,48 @@
   let activeComponents = [];
   let workbookApp = null;
   let builderTarget = null;
-  let builderTabs = [];
-  let builderComponents = [];
+  let builderWidgets = [];
+  let builderSelectedWidget = null;
   let builderSheets = [];
   const qs = (sel) => document.querySelector(sel);
   const toastEl = qs('#toast');
+
+  // Widget type definitions - shared between builder and runtime
+  const WIDGET_TYPES = {
+    // Containers
+    panel: { category: 'container', isContainer: true, icon: '📦', label: 'Panel' },
+    notebook: { category: 'container', isContainer: true, icon: '📑', label: 'Notebook' },
+    'boxsizer-v': { category: 'container', isContainer: true, icon: '⬇️', label: 'VBox' },
+    'boxsizer-h': { category: 'container', isContainer: true, icon: '➡️', label: 'HBox' },
+    gridsizer: { category: 'container', isContainer: true, icon: '▦', label: 'Grid' },
+    scrolled: { category: 'container', isContainer: true, icon: '📜', label: 'Scroll' },
+    // Inputs
+    textinput: { category: 'input', icon: '📝', label: 'Text Input' },
+    number: { category: 'input', icon: '🔢', label: 'Number' },
+    textarea: { category: 'input', icon: '📄', label: 'Text Area' },
+    dropdown: { category: 'input', icon: '📋', label: 'Dropdown' },
+    checkbox: { category: 'input', icon: '☑️', label: 'Checkbox' },
+    radio: { category: 'input', icon: '🔘', label: 'Radio' },
+    slider: { category: 'input', icon: '🎚️', label: 'Slider' },
+    spinctrl: { category: 'input', icon: '🔄', label: 'Spin' },
+    datepicker: { category: 'input', icon: '📅', label: 'Date' },
+    colorpicker: { category: 'input', icon: '🎨', label: 'Color' },
+    // Display
+    label: { category: 'display', icon: '🏷️', label: 'Label' },
+    output: { category: 'display', icon: '👁️', label: 'Output' },
+    image: { category: 'display', icon: '🖼️', label: 'Image' },
+    gauge: { category: 'display', icon: '📊', label: 'Gauge' },
+    separator: { category: 'display', icon: '➖', label: 'Separator' },
+    spacer: { category: 'display', icon: '⬜', label: 'Spacer' },
+    // Actions
+    button: { category: 'action', icon: '🔘', label: 'Button' },
+    togglebtn: { category: 'action', icon: '🔀', label: 'Toggle' },
+    link: { category: 'action', icon: '🔗', label: 'Link' },
+    // Data
+    datagrid: { category: 'data', icon: '📊', label: 'Data Grid', requiresExcel: true },
+    chart: { category: 'data', icon: '📈', label: 'Chart', requiresExcel: true },
+    formula: { category: 'data', icon: '∑', label: 'Formula', requiresExcel: true }
+  };
 
   const showToast = (msg, isError = false) => {
     toastEl.textContent = msg;
@@ -74,34 +111,53 @@
   const usersArea = qs('#users-area');
   const builderModal = qs('#ui-builder-modal');
   const builderClose = qs('#ui-builder-close');
-  const builderCancel = qs('#ui-builder-cancel');
-  const builderComponentsEl = qs('#builder-tabs-tree');
-  const builderEmpty = qs('#builder-empty');
-  const builderAddTabBtn = qs('#builder-add-tab');
-  const builderTabEditor = qs('#builder-tab-editor');
-  const builderComponentEditor = qs('#builder-component-editor');
-  const builderDefaultMessage = qs('#builder-default-message');
-  const builderTabForm = qs('#builder-tab-form');
-  const builderTabIdInput = qs('#builder-tab-id');
-  const builderTabNameInput = qs('#builder-tab-name');
-  const builderTabCancelBtn = qs('#builder-tab-cancel');
-  const builderComponentTabSelect = qs('#builder-component-tab');
-  const builderTreeAppName = qs('#builder-tree-app-name');
-  const builderForm = qs('#builder-form');
-  const builderLabelInput = qs('#builder-label');
-  const builderSheetSelect = qs('#builder-sheet');
-  const builderCellInput = qs('#builder-cell');
-  const builderComponentTypeSelect = qs('#builder-component-type');
-  const builderOptionsInput = qs('#builder-options');
-  const builderMinInput = qs('#builder-min');
-  const builderMaxInput = qs('#builder-max');
-  const builderStepInput = qs('#builder-step');
-  const builderOptionsSection = qs('#builder-options-section');
-  const builderRangeSection = qs('#builder-range-section');
-  const builderComponentIdInput = qs('#builder-component-id');
-  const builderResetBtn = qs('#builder-reset');
   const builderAppLabel = qs('#builder-app-label');
   const builderSaveLayoutBtn = qs('#builder-save-layout');
+  const builderWidgetTree = qs('#builder-widget-tree');
+  const builderTreeRoot = qs('#builder-tree-root');
+  const builderEmpty = qs('#builder-empty');
+  const builderNoSelection = qs('#builder-no-selection');
+  const builderPropertyForm = qs('#builder-property-form');
+  const builderPalette = qs('.builder-palette');
+  // Property form elements
+  const propWidgetId = qs('#prop-widget-id');
+  const propName = qs('#prop-name');
+  const propType = qs('#prop-type');
+  const propLabel = qs('#prop-label');
+  const propPlaceholder = qs('#prop-placeholder');
+  const propTooltip = qs('#prop-tooltip');
+  const propWidth = qs('#prop-width');
+  const propHeight = qs('#prop-height');
+  const propMinWidth = qs('#prop-min-width');
+  const propMinHeight = qs('#prop-min-height');
+  const propProportion = qs('#prop-proportion');
+  const propFlags = qs('#prop-flags');
+  const propMargin = qs('#prop-margin');
+  const propPadding = qs('#prop-padding');
+  const propOrientation = qs('#prop-orientation');
+  const propCols = qs('#prop-cols');
+  const propRows = qs('#prop-rows');
+  const propHgap = qs('#prop-hgap');
+  const propVgap = qs('#prop-vgap');
+  const propOptions = qs('#prop-options');
+  const propMin = qs('#prop-min');
+  const propMax = qs('#prop-max');
+  const propStep = qs('#prop-step');
+  const propDefault = qs('#prop-default');
+  const propExcelEnabled = qs('#prop-excel-enabled');
+  const propExcelFields = qs('#prop-excel-fields');
+  const propSheet = qs('#prop-sheet');
+  const propCell = qs('#prop-cell');
+  const propMode = qs('#prop-mode');
+  const propOnclick = qs('#prop-onclick');
+  const propTarget = qs('#prop-target');
+  const propDeleteWidget = qs('#prop-delete-widget');
+  // Property groups
+  const propGroupLabel = qs('#prop-group-label');
+  const propGroupSizer = qs('#prop-group-sizer');
+  const propGroupInput = qs('#prop-group-input');
+  const propGroupExcel = qs('#prop-group-excel');
+  const propGroupAction = qs('#prop-group-action');
   const previewModal = qs('#ui-preview-modal');
   const previewClose = qs('#ui-preview-close');
   const previewCloseBtn = qs('#ui-preview-close-btn');
@@ -240,14 +296,15 @@
       if (e.target === previewModal) closePreviewModal();
     });
   }
-  builderResetBtn?.addEventListener('click', () => cancelComponentEdit());
-  builderForm?.addEventListener('submit', handleBuilderFormSubmit);
-  builderComponentTypeSelect?.addEventListener('change', handleComponentTypeChange);
-  builderComponentsEl?.addEventListener('click', handleBuilderTreeClick);
-  builderAddTabBtn?.addEventListener('click', () => showTabEditor(null));
-  builderTabForm?.addEventListener('submit', handleTabFormSubmit);
-  builderTabCancelBtn?.addEventListener('click', () => hideAllEditors());
+  
+  // New builder event listeners
+  builderPalette?.addEventListener('click', handlePaletteClick);
+  builderTreeRoot?.addEventListener('click', handleWidgetTreeClick);
+  builderPropertyForm?.addEventListener('submit', handlePropertyFormSubmit);
+  propExcelEnabled?.addEventListener('change', handleExcelToggle);
+  propDeleteWidget?.addEventListener('click', handleDeleteWidget);
   builderSaveLayoutBtn?.addEventListener('click', () => saveBuilderLayout());
+  
   appUiForm?.addEventListener('change', handleAppFormChange);
   appUiForm?.addEventListener('submit', (e) => e.preventDefault());
 
@@ -446,18 +503,234 @@
   }
 
   function renderAppUi(schema) {
+    const widgets = schema?.widgets || [];
     const tabs = schema?.tabs || [];
     const legacyComponents = schema?.components;
     
-    // Handle legacy format (no tabs)
-    if (legacyComponents && legacyComponents.length > 0 && tabs.length === 0) {
+    // Handle new widget format
+    if (widgets && widgets.length > 0) {
+      renderWidgetBasedUi(widgets);
+      return;
+    }
+    
+    // Handle legacy tab format
+    if (tabs && tabs.length > 0) {
+      renderTabBasedAppUi(tabs);
+      return;
+    }
+    
+    // Handle very old format (no tabs)
+    if (legacyComponents && legacyComponents.length > 0) {
       const components = normalizeComponents(legacyComponents);
       activeComponents = components;
       renderLegacyAppUi(components);
       return;
     }
     
-    // Handle new tab format
+    // Empty state
+    if (!appUiForm || !appUiEmpty) return;
+    appUiForm.classList.add('hidden');
+    appUiEmpty.classList.remove('hidden');
+    appUiForm.innerHTML = '';
+    activeComponents = [];
+  }
+
+  function renderWidgetBasedUi(widgets) {
+    if (!appUiForm || !appUiEmpty) return;
+    if (!widgets.length) {
+      appUiForm.classList.add('hidden');
+      appUiEmpty.classList.remove('hidden');
+      appUiForm.innerHTML = '';
+      activeComponents = [];
+      return;
+    }
+    
+    appUiEmpty.classList.add('hidden');
+    appUiForm.classList.remove('hidden');
+    
+    // Collect all Excel-bound widgets for refresh
+    activeComponents = collectExcelWidgets(widgets);
+    
+    // Render widget tree
+    appUiForm.innerHTML = widgets.map(w => renderWidget(w)).join('');
+  }
+
+  function collectExcelWidgets(widgets) {
+    let result = [];
+    for (const w of widgets) {
+      if (w.excel?.enabled && w.excel.sheet && w.excel.cell) {
+        result.push({
+          id: w.id,
+          sheet: w.excel.sheet,
+          cell: w.excel.cell,
+          mode: w.excel.mode,
+          componentType: w.type
+        });
+      }
+      if (w.children) {
+        result = result.concat(collectExcelWidgets(w.children));
+      }
+    }
+    return result;
+  }
+
+  function renderWidget(widget) {
+    const def = WIDGET_TYPES[widget.type] || {};
+    const props = widget.properties || {};
+    const excel = widget.excel || {};
+    const label = props.label || widget.name || 'Widget';
+    
+    // Layout styles
+    const styles = [];
+    if (props.width) styles.push(`width: ${props.width}`);
+    if (props.height) styles.push(`height: ${props.height}`);
+    if (props.margin) styles.push(`margin: ${props.margin}px`);
+    if (props.padding) styles.push(`padding: ${props.padding}px`);
+    const styleAttr = styles.length ? ` style="${styles.join('; ')}"` : '';
+    
+    // Handle containers
+    if (def.isContainer) {
+      return renderContainerWidget(widget, def, props, styleAttr);
+    }
+    
+    // Handle regular widgets
+    return renderLeafWidget(widget, def, props, excel, styleAttr);
+  }
+
+  function renderContainerWidget(widget, def, props, styleAttr) {
+    const children = (widget.children || []).map(c => renderWidget(c)).join('');
+    const orientation = props.orientation || 'vertical';
+    const gap = orientation === 'vertical' ? (props.vgap || 4) : (props.hgap || 4);
+    
+    switch (widget.type) {
+      case 'notebook':
+        // Tabbed notebook
+        const tabBtns = (widget.children || []).map((child, idx) => {
+          const tabLabel = child.properties?.label || child.name || `Tab ${idx + 1}`;
+          return `<button type="button" class="app-tab-btn${idx === 0 ? ' active' : ''}" data-tab-target="nb-${widget.id}-${idx}">${escapeHtml(tabLabel)}</button>`;
+        }).join('');
+        const tabPanels = (widget.children || []).map((child, idx) => {
+          const panelContent = (child.children || []).map(c => renderWidget(c)).join('');
+          return `<div class="app-tab-panel${idx === 0 ? ' active' : ''}" data-tab-id="nb-${widget.id}-${idx}"${styleAttr}>${panelContent}</div>`;
+        }).join('');
+        return `<div class="widget-notebook" data-widget="${widget.id}"><div class="app-tabs">${tabBtns}</div><div class="app-tab-content">${tabPanels}</div></div>`;
+      
+      case 'boxsizer-v':
+        return `<div class="widget-vbox" style="display: flex; flex-direction: column; gap: ${gap}px;"${styleAttr} data-widget="${widget.id}">${children}</div>`;
+      
+      case 'boxsizer-h':
+        return `<div class="widget-hbox" style="display: flex; flex-direction: row; gap: ${gap}px; flex-wrap: wrap;"${styleAttr} data-widget="${widget.id}">${children}</div>`;
+      
+      case 'gridsizer':
+        const cols = props.cols || 2;
+        const hgap = props.hgap || 4;
+        const vgap = props.vgap || 4;
+        return `<div class="widget-grid" style="display: grid; grid-template-columns: repeat(${cols}, 1fr); gap: ${vgap}px ${hgap}px;"${styleAttr} data-widget="${widget.id}">${children}</div>`;
+      
+      case 'scrolled':
+        return `<div class="widget-scrolled" style="overflow: auto; max-height: ${props.height || '300px'};"${styleAttr} data-widget="${widget.id}">${children}</div>`;
+      
+      case 'panel':
+      default:
+        return `<div class="widget-panel"${styleAttr} data-widget="${widget.id}">${children}</div>`;
+    }
+  }
+
+  function renderLeafWidget(widget, def, props, excel, styleAttr) {
+    const label = escapeHtml(props.label || widget.name || 'Widget');
+    const id = widget.id;
+    const hasExcel = excel.enabled && excel.sheet && excel.cell;
+    const cellRef = hasExcel ? `${escapeHtml(excel.sheet)}!${escapeHtml(excel.cell)}` : '';
+    const placeholder = props.placeholder || cellRef || '';
+    const metaHtml = hasExcel ? `<div class="app-meta">${cellRef}</div>` : '';
+    
+    switch (widget.type) {
+      case 'label':
+        return `<div class="app-ui-field"${styleAttr}><span class="widget-label">${label}</span></div>`;
+      
+      case 'output':
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><output data-component="${id}">—</output>${metaHtml}</div>`;
+      
+      case 'textinput':
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="text" placeholder="${escapeHtml(placeholder)}" />${metaHtml}</div>`;
+      
+      case 'number':
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="number" placeholder="${escapeHtml(placeholder)}" />${metaHtml}</div>`;
+      
+      case 'textarea':
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><textarea data-component="${id}" rows="4" placeholder="${escapeHtml(placeholder)}"></textarea>${metaHtml}</div>`;
+      
+      case 'dropdown':
+        const options = (props.options || '').split(',').map(o => o.trim()).filter(Boolean);
+        const optionsHtml = options.map(opt => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join('');
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><select data-component="${id}"><option value="">Select...</option>${optionsHtml}</select>${metaHtml}</div>`;
+      
+      case 'checkbox':
+        return `<div class="app-ui-field checkbox"${styleAttr}><label><input type="checkbox" data-component="${id}" /> ${label}</label>${metaHtml}</div>`;
+      
+      case 'radio':
+        const radioOpts = (props.options || '').split(',').map(o => o.trim()).filter(Boolean);
+        const radioHtml = radioOpts.map((opt, i) => `<label class="radio-option"><input type="radio" name="radio-${id}" value="${escapeHtml(opt)}" data-component="${id}" /> ${escapeHtml(opt)}</label>`).join('');
+        return `<div class="app-ui-field radio"${styleAttr}><div class="radio-label">${label}</div><div class="radio-group">${radioHtml}</div>${metaHtml}</div>`;
+      
+      case 'slider':
+        const min = props.min ?? 0;
+        const max = props.max ?? 100;
+        const step = props.step ?? 1;
+        return `<div class="app-ui-field"${styleAttr}><label>${label} <span class="slider-value" data-value-for="${id}">—</span></label><input type="range" data-component="${id}" min="${min}" max="${max}" step="${step}" />${metaHtml}</div>`;
+      
+      case 'spinctrl':
+        const spinMin = props.min ?? 0;
+        const spinMax = props.max ?? 100;
+        const spinStep = props.step ?? 1;
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="number" min="${spinMin}" max="${spinMax}" step="${spinStep}" />${metaHtml}</div>`;
+      
+      case 'datepicker':
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="date" />${metaHtml}</div>`;
+      
+      case 'colorpicker':
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="color" />${metaHtml}</div>`;
+      
+      case 'button':
+        return `<div class="app-ui-field"${styleAttr}><button type="button" class="widget-button" data-component="${id}" data-action="${escapeHtml(props.onclick || '')}">${label}</button></div>`;
+      
+      case 'togglebtn':
+        return `<div class="app-ui-field"${styleAttr}><button type="button" class="widget-toggle" data-component="${id}">${label}</button></div>`;
+      
+      case 'link':
+        const href = props.target || '#';
+        return `<div class="app-ui-field"${styleAttr}><a href="${escapeHtml(href)}" class="widget-link" data-component="${id}">${label}</a></div>`;
+      
+      case 'gauge':
+        const gaugeMin = props.min ?? 0;
+        const gaugeMax = props.max ?? 100;
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><progress data-component="${id}" min="${gaugeMin}" max="${gaugeMax}" value="0"></progress>${metaHtml}</div>`;
+      
+      case 'image':
+        return `<div class="app-ui-field"${styleAttr}><img class="widget-image" data-component="${id}" src="" alt="${label}" /></div>`;
+      
+      case 'separator':
+        return `<hr class="widget-separator"${styleAttr} />`;
+      
+      case 'spacer':
+        const spacerH = props.height || '16px';
+        return `<div class="widget-spacer" style="height: ${spacerH};"${styleAttr}></div>`;
+      
+      case 'datagrid':
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><div class="widget-datagrid" data-component="${id}">Loading data...</div>${metaHtml}</div>`;
+      
+      case 'chart':
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><div class="widget-chart" data-component="${id}">Chart placeholder</div>${metaHtml}</div>`;
+      
+      case 'formula':
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><output class="widget-formula" data-component="${id}">—</output>${metaHtml}</div>`;
+      
+      default:
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><span>Unknown widget type: ${widget.type}</span></div>`;
+    }
+  }
+
+  function renderTabBasedAppUi(tabs) {
     if (!appUiForm || !appUiEmpty) return;
     if (!tabs.length) {
       appUiForm.classList.add('hidden');
@@ -668,106 +941,457 @@
         fetchWorkbookSheets(owner, name)
       ]);
       builderTarget = { owner, name };
-      const components = normalizeComponents(schema?.components);
-      const tabs = schema?.tabs || [];
       
-      // Migrate old format to new tab-based format if needed
-      if (components.length > 0 && tabs.length === 0) {
-        builderTabs = [{ id: createComponentId(), name: 'Main', components: components }];
+      // Load or create widget tree from schema
+      if (schema?.widgets) {
+        // New widget format
+        builderWidgets = normalizeWidgets(schema.widgets);
+      } else if (schema?.tabs) {
+        // Migrate from old tab format
+        builderWidgets = migrateTabsToWidgets(schema.tabs);
+      } else if (schema?.components?.length) {
+        // Very old component format
+        builderWidgets = migrateComponentsToWidgets(schema.components);
       } else {
-        builderTabs = tabs.map(tab => ({
-          ...tab,
-          id: tab.id || createComponentId(),
-          components: normalizeComponents(tab.components || [])
-        }));
+        builderWidgets = [];
       }
-      builderComponents = [];
       
+      builderSelectedWidget = null;
       setSheetOptions(sheets);
       if (builderAppLabel) builderAppLabel.textContent = `${owner}/${name}`;
-      if (builderTreeAppName) builderTreeAppName.textContent = name;
-      hideAllEditors();
-      renderBuilderTree();
+      renderWidgetTree();
+      hidePropertyForm();
       openBuilderModal();
     } catch (err) {
       showToast(err.message || 'Unable to load builder', true);
     }
   }
 
-  function renderBuilderTree() {
-    if (!builderComponentsEl) return;
+  function normalizeWidgets(widgets) {
+    if (!Array.isArray(widgets)) return [];
+    return widgets.map(w => ({
+      ...w,
+      id: w.id || createWidgetId(),
+      children: normalizeWidgets(w.children || [])
+    }));
+  }
+
+  function migrateTabsToWidgets(tabs) {
+    // Convert old tab format to notebook widget with panels
+    if (!tabs || !tabs.length) return [];
+    const notebook = {
+      id: createWidgetId(),
+      type: 'notebook',
+      name: 'MainNotebook',
+      children: tabs.map(tab => ({
+        id: tab.id || createWidgetId(),
+        type: 'panel',
+        name: tab.name,
+        properties: { label: tab.name },
+        children: (tab.components || []).map(comp => migrateComponentToWidget(comp))
+      }))
+    };
+    return [notebook];
+  }
+
+  function migrateComponentsToWidgets(components) {
+    // Wrap old components in a VBox
+    return [{
+      id: createWidgetId(),
+      type: 'boxsizer-v',
+      name: 'MainLayout',
+      children: components.map(comp => migrateComponentToWidget(comp))
+    }];
+  }
+
+  function migrateComponentToWidget(comp) {
+    const typeMap = {
+      text: 'textinput',
+      number: 'number',
+      textarea: 'textarea',
+      dropdown: 'dropdown',
+      slider: 'slider',
+      checkbox: 'checkbox',
+      display: 'output'
+    };
+    return {
+      id: comp.id || createWidgetId(),
+      type: typeMap[comp.componentType] || 'textinput',
+      name: comp.label || comp.cell || 'Widget',
+      properties: {
+        label: comp.label || '',
+        options: comp.options || '',
+        min: comp.min,
+        max: comp.max,
+        step: comp.step
+      },
+      excel: {
+        enabled: true,
+        sheet: comp.sheet || '',
+        cell: comp.cell || '',
+        mode: 'bidirectional'
+      },
+      children: []
+    };
+  }
+
+  function createWidgetId() {
+    return 'w-' + Math.random().toString(36).slice(2, 9);
+  }
+
+  function renderWidgetTree() {
+    if (!builderTreeRoot) return;
     
-    if (!builderTabs.length) {
-      builderComponentsEl.innerHTML = '';
+    if (!builderWidgets.length) {
+      builderTreeRoot.innerHTML = '';
       builderEmpty?.classList.remove('hidden');
       return;
     }
     
     builderEmpty?.classList.add('hidden');
-    builderComponentsEl.innerHTML = builderTabs.map((tab, tabIndex) => {
-      const componentCount = tab.components?.length || 0;
-      const collapsed = tab.collapsed || false;
-      const componentsHtml = (tab.components || []).map((comp, compIndex) => {
-        const typeLabel = getComponentTypeLabel(comp.componentType || 'text');
-        const typeIcon = getComponentTypeIcon(comp.componentType || 'text');
-        const cellRef = `${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')}`;
-        return `<div class="tree-node tree-component-node" data-component-id="${comp.id}" data-tab-id="${tab.id}">
-          <span class="tree-icon component-icon">${typeIcon}</span>
-          <div class="tree-node-content">
-            <div class="tree-node-label">${escapeHtml(comp.label || comp.cell || 'Component')}</div>
-            <div class="tree-node-meta">
-              <span class="tree-meta-cell">${cellRef}</span>
-              <span class="tree-meta-type">${typeLabel}</span>
-            </div>
-          </div>
-          <div class="tree-node-actions">
-            <button type="button" class="tree-btn tree-btn-edit" data-edit-component="${comp.id}" data-tab-id="${tab.id}" title="Edit Component">✏️</button>
-            <button type="button" class="tree-btn tree-btn-delete" data-remove-component="${comp.id}" data-tab-id="${tab.id}" title="Remove Component">🗑️</button>
-          </div>
-        </div>`;
-      }).join('');
-      
-      const emptyMessage = componentCount === 0 ? '<div class="tree-empty-tab">No components yet. Click + to add one.</div>' : '';
-      
-      return `<div class="tree-tab-group ${collapsed ? 'collapsed' : ''}">
-        <div class="tree-node tree-tab-node" data-tab-id="${tab.id}">
-          <button type="button" class="tree-expand-btn" data-toggle-tab="${tab.id}" title="${collapsed ? 'Expand' : 'Collapse'}">
-            <span class="tree-expand-icon">${collapsed ? '▶' : '▼'}</span>
-          </button>
-          <span class="tree-icon tab-icon">📑</span>
-          <div class="tree-node-content">
-            <div class="tree-node-label">${escapeHtml(tab.name)}</div>
-            <div class="tree-node-meta">${componentCount} component${componentCount !== 1 ? 's' : ''}</div>
-          </div>
-          <div class="tree-node-actions">
-            <button type="button" class="tree-btn tree-btn-add" data-add-component="${tab.id}" title="Add Component">+ Component</button>
-            <button type="button" class="tree-btn tree-btn-edit" data-edit-tab="${tab.id}" title="Edit Tab">✏️</button>
-            <button type="button" class="tree-btn tree-btn-delete" data-remove-tab="${tab.id}" title="Remove Tab">🗑️</button>
-          </div>
-        </div>
-        <div class="tree-children ${collapsed ? 'hidden' : ''}">${emptyMessage}${componentsHtml}</div>
-      </div>`;
-    }).join('');
+    builderTreeRoot.innerHTML = builderWidgets.map(w => renderWidgetNode(w, 0)).join('');
   }
 
-  function getComponentTypeIcon(type) {
-    const icons = {
-      text: '📝',
-      number: '🔢',
-      textarea: '📄',
-      dropdown: '📋',
-      slider: '🎚️',
-      checkbox: '☑️',
-      display: '👁️'
+  function renderWidgetNode(widget, depth) {
+    const def = WIDGET_TYPES[widget.type] || { icon: '❓', label: widget.type };
+    const isContainer = def.isContainer;
+    const hasChildren = widget.children && widget.children.length > 0;
+    const collapsed = widget.collapsed || false;
+    const selected = builderSelectedWidget === widget.id;
+    
+    const indent = depth * 16;
+    const childrenHtml = isContainer && hasChildren && !collapsed
+      ? `<div class="tree-children">${widget.children.map(c => renderWidgetNode(c, depth + 1)).join('')}</div>`
+      : '';
+    
+    const expandBtn = isContainer
+      ? `<button type="button" class="tree-expand-btn" data-toggle-widget="${widget.id}">
+           <span class="tree-expand-icon">${collapsed ? '▶' : '▼'}</span>
+         </button>`
+      : '<span class="tree-expand-spacer"></span>';
+    
+    return `<div class="tree-widget-group">
+      <div class="tree-widget-node ${selected ? 'selected' : ''}" 
+           data-widget-id="${widget.id}" 
+           style="padding-left: ${indent}px">
+        ${expandBtn}
+        <span class="widget-icon">${def.icon}</span>
+        <span class="widget-name">${escapeHtml(widget.name || def.label)}</span>
+        <span class="widget-type">${escapeHtml(def.label)}</span>
+      </div>
+      ${childrenHtml}
+    </div>`;
+  }
+
+  function handlePaletteClick(e) {
+    const btn = e.target.closest('.palette-widget');
+    if (!btn) return;
+    
+    const widgetType = btn.dataset.widget;
+    if (!widgetType || !WIDGET_TYPES[widgetType]) return;
+    
+    const def = WIDGET_TYPES[widgetType];
+    const newWidget = {
+      id: createWidgetId(),
+      type: widgetType,
+      name: def.label,
+      properties: getDefaultProperties(widgetType),
+      excel: { enabled: false, sheet: '', cell: '', mode: 'bidirectional' },
+      children: []
     };
-    return icons[type] || '📝';
+    
+    // If a container is selected, add as child; otherwise add to root
+    if (builderSelectedWidget) {
+      const parent = findWidgetById(builderWidgets, builderSelectedWidget);
+      if (parent && WIDGET_TYPES[parent.type]?.isContainer) {
+        parent.children = parent.children || [];
+        parent.children.push(newWidget);
+      } else {
+        builderWidgets.push(newWidget);
+      }
+    } else {
+      builderWidgets.push(newWidget);
+    }
+    
+    // Select the new widget
+    builderSelectedWidget = newWidget.id;
+    renderWidgetTree();
+    showPropertyForm(newWidget);
+  }
+
+  function getDefaultProperties(type) {
+    const defaults = {
+      slider: { min: 0, max: 100, step: 1 },
+      spinctrl: { min: 0, max: 100, step: 1 },
+      gauge: { min: 0, max: 100 },
+      gridsizer: { cols: 2, rows: 0, hgap: 4, vgap: 4 },
+      'boxsizer-v': { orientation: 'vertical', vgap: 4 },
+      'boxsizer-h': { orientation: 'horizontal', hgap: 4 }
+    };
+    return defaults[type] || {};
+  }
+
+  function findWidgetById(widgets, id) {
+    for (const w of widgets) {
+      if (w.id === id) return w;
+      if (w.children) {
+        const found = findWidgetById(w.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  function findWidgetParent(widgets, id, parent = null) {
+    for (const w of widgets) {
+      if (w.id === id) return parent;
+      if (w.children) {
+        const found = findWidgetParent(w.children, id, w);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  }
+
+  function removeWidgetById(widgets, id) {
+    const idx = widgets.findIndex(w => w.id === id);
+    if (idx >= 0) {
+      widgets.splice(idx, 1);
+      return true;
+    }
+    for (const w of widgets) {
+      if (w.children && removeWidgetById(w.children, id)) return true;
+    }
+    return false;
+  }
+
+  function handleWidgetTreeClick(e) {
+    // Toggle expand/collapse
+    const toggleBtn = e.target.closest('[data-toggle-widget]');
+    if (toggleBtn) {
+      const widgetId = toggleBtn.dataset.toggleWidget;
+      const widget = findWidgetById(builderWidgets, widgetId);
+      if (widget) {
+        widget.collapsed = !widget.collapsed;
+        renderWidgetTree();
+      }
+      return;
+    }
+    
+    // Select widget
+    const node = e.target.closest('.tree-widget-node');
+    if (node) {
+      const widgetId = node.dataset.widgetId;
+      builderSelectedWidget = widgetId;
+      renderWidgetTree();
+      const widget = findWidgetById(builderWidgets, widgetId);
+      if (widget) showPropertyForm(widget);
+    }
+  }
+
+  function showPropertyForm(widget) {
+    if (!builderPropertyForm || !builderNoSelection) return;
+    
+    builderNoSelection.classList.add('hidden');
+    builderPropertyForm.classList.remove('hidden');
+    
+    const def = WIDGET_TYPES[widget.type] || {};
+    const props = widget.properties || {};
+    const excel = widget.excel || { enabled: false };
+    
+    // Fill common fields
+    if (propWidgetId) propWidgetId.value = widget.id;
+    if (propName) propName.value = widget.name || '';
+    if (propType) propType.value = def.label || widget.type;
+    if (propLabel) propLabel.value = props.label || '';
+    if (propPlaceholder) propPlaceholder.value = props.placeholder || '';
+    if (propTooltip) propTooltip.value = props.tooltip || '';
+    
+    // Layout
+    if (propWidth) propWidth.value = props.width || '';
+    if (propHeight) propHeight.value = props.height || '';
+    if (propMinWidth) propMinWidth.value = props.minWidth || '';
+    if (propMinHeight) propMinHeight.value = props.minHeight || '';
+    if (propProportion) propProportion.value = props.proportion ?? 0;
+    if (propMargin) propMargin.value = props.margin ?? 4;
+    if (propPadding) propPadding.value = props.padding ?? 0;
+    
+    // Flags
+    if (propFlags) {
+      const flags = props.flags || [];
+      Array.from(propFlags.options).forEach(opt => {
+        opt.selected = flags.includes(opt.value);
+      });
+    }
+    
+    // Sizer options
+    if (propOrientation) propOrientation.value = props.orientation || 'vertical';
+    if (propCols) propCols.value = props.cols ?? 2;
+    if (propRows) propRows.value = props.rows ?? 0;
+    if (propHgap) propHgap.value = props.hgap ?? 4;
+    if (propVgap) propVgap.value = props.vgap ?? 4;
+    
+    // Input options
+    if (propOptions) propOptions.value = props.options || '';
+    if (propMin) propMin.value = props.min ?? 0;
+    if (propMax) propMax.value = props.max ?? 100;
+    if (propStep) propStep.value = props.step ?? 1;
+    if (propDefault) propDefault.value = props.defaultValue || '';
+    
+    // Excel binding
+    if (propExcelEnabled) propExcelEnabled.checked = excel.enabled;
+    if (propExcelFields) propExcelFields.classList.toggle('hidden', !excel.enabled);
+    if (propSheet) propSheet.value = excel.sheet || '';
+    if (propCell) propCell.value = excel.cell || '';
+    if (propMode) propMode.value = excel.mode || 'bidirectional';
+    
+    // Action
+    if (propOnclick) propOnclick.value = props.onclick || '';
+    if (propTarget) propTarget.value = props.target || '';
+    
+    // Show/hide sections based on widget type
+    updatePropertyVisibility(widget.type);
+  }
+
+  function updatePropertyVisibility(type) {
+    const def = WIDGET_TYPES[type] || {};
+    const category = def.category;
+    const isContainer = def.isContainer;
+    
+    // Label/content section - show for most widgets
+    if (propGroupLabel) {
+      propGroupLabel.classList.toggle('hidden', type === 'separator' || type === 'spacer');
+    }
+    
+    // Sizer options - only for container types
+    if (propGroupSizer) {
+      propGroupSizer.classList.toggle('hidden', !isContainer);
+    }
+    
+    // Grid-specific options
+    const propGridOptions = qs('#prop-grid-options');
+    if (propGridOptions) {
+      propGridOptions.classList.toggle('hidden', type !== 'gridsizer');
+    }
+    
+    // Input options - only for input types with options/range
+    if (propGroupInput) {
+      const hasOptions = ['dropdown', 'radio'].includes(type);
+      const hasRange = ['slider', 'spinctrl', 'gauge', 'number'].includes(type);
+      propGroupInput.classList.toggle('hidden', !hasOptions && !hasRange);
+      
+      const optionsRow = qs('#prop-options-row');
+      const rangeOptions = qs('#prop-range-options');
+      const stepRow = qs('#prop-step-row');
+      if (optionsRow) optionsRow.classList.toggle('hidden', !hasOptions);
+      if (rangeOptions) rangeOptions.classList.toggle('hidden', !hasRange);
+      if (stepRow) stepRow.classList.toggle('hidden', !['slider', 'spinctrl'].includes(type));
+    }
+    
+    // Excel binding - available for most widgets except pure containers/decorators
+    if (propGroupExcel) {
+      const noExcel = ['separator', 'spacer', 'boxsizer-v', 'boxsizer-h', 'gridsizer'].includes(type);
+      propGroupExcel.classList.toggle('hidden', noExcel);
+    }
+    
+    // Action section - only for buttons/links
+    if (propGroupAction) {
+      propGroupAction.classList.toggle('hidden', category !== 'action');
+    }
+    
+    // Placeholder row - only for text inputs
+    const placeholderRow = qs('#prop-placeholder-row');
+    if (placeholderRow) {
+      placeholderRow.classList.toggle('hidden', !['textinput', 'textarea', 'number'].includes(type));
+    }
+  }
+
+  function handleExcelToggle(e) {
+    if (propExcelFields) {
+      propExcelFields.classList.toggle('hidden', !e.target.checked);
+    }
+  }
+
+  function handlePropertyFormSubmit(e) {
+    e.preventDefault();
+    
+    const widgetId = propWidgetId?.value;
+    if (!widgetId) return;
+    
+    const widget = findWidgetById(builderWidgets, widgetId);
+    if (!widget) return;
+    
+    // Update widget from form
+    widget.name = propName?.value || widget.name;
+    widget.properties = widget.properties || {};
+    widget.properties.label = propLabel?.value || '';
+    widget.properties.placeholder = propPlaceholder?.value || '';
+    widget.properties.tooltip = propTooltip?.value || '';
+    widget.properties.width = propWidth?.value || '';
+    widget.properties.height = propHeight?.value || '';
+    widget.properties.minWidth = propMinWidth?.value || '';
+    widget.properties.minHeight = propMinHeight?.value || '';
+    widget.properties.proportion = Number(propProportion?.value ?? 0);
+    widget.properties.margin = Number(propMargin?.value ?? 4);
+    widget.properties.padding = Number(propPadding?.value ?? 0);
+    
+    // Flags
+    if (propFlags) {
+      widget.properties.flags = Array.from(propFlags.selectedOptions).map(o => o.value);
+    }
+    
+    // Sizer
+    widget.properties.orientation = propOrientation?.value || 'vertical';
+    widget.properties.cols = Number(propCols?.value ?? 2);
+    widget.properties.rows = Number(propRows?.value ?? 0);
+    widget.properties.hgap = Number(propHgap?.value ?? 4);
+    widget.properties.vgap = Number(propVgap?.value ?? 4);
+    
+    // Input
+    widget.properties.options = propOptions?.value || '';
+    widget.properties.min = Number(propMin?.value ?? 0);
+    widget.properties.max = Number(propMax?.value ?? 100);
+    widget.properties.step = Number(propStep?.value ?? 1);
+    widget.properties.defaultValue = propDefault?.value || '';
+    
+    // Excel
+    widget.excel = widget.excel || {};
+    widget.excel.enabled = propExcelEnabled?.checked || false;
+    widget.excel.sheet = propSheet?.value || '';
+    widget.excel.cell = propCell?.value || '';
+    widget.excel.mode = propMode?.value || 'bidirectional';
+    
+    // Action
+    widget.properties.onclick = propOnclick?.value || '';
+    widget.properties.target = propTarget?.value || '';
+    
+    renderWidgetTree();
+    showToast('Properties updated');
+  }
+
+  function handleDeleteWidget() {
+    const widgetId = propWidgetId?.value;
+    if (!widgetId) return;
+    
+    if (!confirm('Delete this widget and all its children?')) return;
+    
+    removeWidgetById(builderWidgets, widgetId);
+    builderSelectedWidget = null;
+    hidePropertyForm();
+    renderWidgetTree();
+    showToast('Widget deleted');
+  }
+
+  function hidePropertyForm() {
+    if (builderPropertyForm) builderPropertyForm.classList.add('hidden');
+    if (builderNoSelection) builderNoSelection.classList.remove('hidden');
   }
 
   function showSheetLoadingState() {
-    if (!builderSheetSelect) return;
-    builderSheetSelect.disabled = true;
-    builderSheetSelect.innerHTML = '<option value="">Loading sheets…</option>';
-    builderSheetSelect.value = '';
+    if (!propSheet) return;
+    propSheet.disabled = true;
+    propSheet.innerHTML = '<option value="">Loading sheets…</option>';
+    propSheet.value = '';
   }
 
   function setSheetOptions(sheets, preferred) {
@@ -784,262 +1408,28 @@
   }
 
   function renderSheetOptions(preferred) {
-    if (!builderSheetSelect) return;
-    const targetValue = preferred ?? builderSheetSelect.value;
+    if (!propSheet) return;
+    const targetValue = preferred ?? propSheet.value;
     if (!builderSheets.length) {
-      builderSheetSelect.disabled = true;
-      builderSheetSelect.innerHTML = '<option value="">No sheets found</option>';
-      builderSheetSelect.value = '';
+      propSheet.disabled = true;
+      propSheet.innerHTML = '<option value="">No sheets found</option>';
+      propSheet.value = '';
       return;
     }
-    builderSheetSelect.disabled = false;
-    builderSheetSelect.innerHTML = builderSheets
+    propSheet.disabled = false;
+    propSheet.innerHTML = builderSheets
       .map(sheet => `<option value="${escapeHtml(sheet)}">${escapeHtml(sheet)}</option>`)
       .join('');
     if (targetValue && builderSheets.includes(targetValue)) {
-      builderSheetSelect.value = targetValue;
+      propSheet.value = targetValue;
     } else {
-      builderSheetSelect.value = builderSheets[0];
+      propSheet.value = builderSheets[0];
     }
-  }
-
-  function handleComponentTypeChange(e) {
-    const type = e.target.value;
-    if (builderOptionsSection) {
-      builderOptionsSection.classList.toggle('hidden', type !== 'dropdown');
-    }
-    if (builderRangeSection) {
-      builderRangeSection.classList.toggle('hidden', type !== 'slider');
-    }
-  }
-
-  function getComponentTypeLabel(type) {
-    const labels = {
-      text: 'Text Input',
-      number: 'Number Input',
-      textarea: 'Text Area',
-      dropdown: 'Dropdown',
-      slider: 'Slider',
-      checkbox: 'Checkbox',
-      display: 'Display'
-    };
-    return labels[type] || 'Text Input';
-  }
-
-  function setBuilderEditing(id) {
-    if (!builderForm) return;
-    if (!id) {
-      builderComponentIdInput.value = '';
-      builderForm.reset();
-      if (builderComponentTypeSelect) builderComponentTypeSelect.value = 'text';
-      if (builderSheetSelect) builderSheetSelect.value = builderSheets[0] || '';
-      if (builderOptionsSection) builderOptionsSection.classList.add('hidden');
-      if (builderRangeSection) builderRangeSection.classList.add('hidden');
-      return;
-    }
-    const comp = builderComponents.find(c => c.id === id);
-    if (!comp) return setBuilderEditing(null);
-    builderComponentIdInput.value = comp.id;
-    builderLabelInput.value = comp.label || '';
-    ensureSheetOption(comp.sheet || '');
-    if (builderSheetSelect) builderSheetSelect.value = comp.sheet || builderSheets[0] || '';
-    builderCellInput.value = comp.cell || '';
-    const componentType = comp.componentType || 'text';
-    if (builderComponentTypeSelect) builderComponentTypeSelect.value = componentType;
-    if (builderOptionsInput) builderOptionsInput.value = comp.options || '';
-    if (builderMinInput) builderMinInput.value = comp.min ?? 0;
-    if (builderMaxInput) builderMaxInput.value = comp.max ?? 100;
-    if (builderStepInput) builderStepInput.value = comp.step ?? 1;
-    if (builderOptionsSection) builderOptionsSection.classList.toggle('hidden', componentType !== 'dropdown');
-    if (builderRangeSection) builderRangeSection.classList.toggle('hidden', componentType !== 'slider');
-  }
-
-  function handleBuilderFormSubmit(e) {
-    e.preventDefault();
-    if (!builderTarget) return showToast('Select an app to design', true);
-    
-    const tabId = builderComponentTabSelect?.value;
-    if (!tabId) return showToast('Select a tab', true);
-    
-    const label = builderLabelInput.value.trim() || 'Untitled field';
-    const sheet = (builderSheetSelect?.value || '').trim();
-    if (!sheet) return showToast('Select a sheet', true);
-    const cell = builderCellInput.value.trim();
-    if (!cell) return showToast('Cell / range is required', true);
-    const componentType = builderComponentTypeSelect?.value || 'text';
-    const id = builderComponentIdInput.value || createComponentId();
-    
-    const next = { id, label, sheet, cell, componentType };
-    if (componentType === 'dropdown') {
-      next.options = builderOptionsInput?.value || '';
-    }
-    if (componentType === 'slider') {
-      next.min = Number(builderMinInput?.value ?? 0);
-      next.max = Number(builderMaxInput?.value ?? 100);
-      next.step = Number(builderStepInput?.value ?? 1);
-    }
-    
-    const tab = builderTabs.find(t => t.id === tabId);
-    if (!tab) return showToast('Tab not found', true);
-    
-    const idx = tab.components.findIndex(c => c.id === id);
-    if (idx >= 0) {
-      tab.components[idx] = next;
-    } else {
-      tab.components.push(next);
-    }
-    
-    hideAllEditors();
-    renderBuilderTree();
-  }
-
-  function handleBuilderTreeClick(e) {
-    // Toggle tab collapse/expand
-    const toggleBtn = e.target.closest('[data-toggle-tab]');
-    if (toggleBtn) {
-      const tabId = toggleBtn.dataset.toggleTab;
-      const tab = builderTabs.find(t => t.id === tabId);
-      if (tab) {
-        tab.collapsed = !tab.collapsed;
-        renderBuilderTree();
-      }
-      return;
-    }
-    
-    const addComponentBtn = e.target.closest('[data-add-component]');
-    if (addComponentBtn) {
-      const tabId = addComponentBtn.dataset.addComponent;
-      showComponentEditor(null, tabId);
-      return;
-    }
-    
-    const editTabBtn = e.target.closest('[data-edit-tab]');
-    if (editTabBtn) {
-      const tabId = editTabBtn.dataset.editTab;
-      showTabEditor(tabId);
-      return;
-    }
-    
-    const removeTabBtn = e.target.closest('[data-remove-tab]');
-    if (removeTabBtn) {
-      const tabId = removeTabBtn.dataset.removeTab;
-      if (confirm('Remove this tab and all its components?')) {
-        builderTabs = builderTabs.filter(t => t.id !== tabId);
-        hideAllEditors();
-        renderBuilderTree();
-      }
-      return;
-    }
-    
-    const editBtn = e.target.closest('[data-edit-component]');
-    if (editBtn) {
-      const componentId = editBtn.dataset.editComponent;
-      const tabId = editBtn.dataset.tabId;
-      showComponentEditor(componentId, tabId);
-      return;
-    }
-    
-    const removeBtn = e.target.closest('[data-remove-component]');
-    if (removeBtn) {
-      const componentId = removeBtn.dataset.removeComponent;
-      const tabId = removeBtn.dataset.tabId;
-      const tab = builderTabs.find(t => t.id === tabId);
-      if (tab) {
-        tab.components = tab.components.filter(c => c.id !== componentId);
-        hideAllEditors();
-        renderBuilderTree();
-      }
-    }
-  }
-
-  function showTabEditor(tabId) {
-    hideAllEditors();
-    if (builderTabEditor) builderTabEditor.classList.remove('hidden');
-    
-    if (!tabId) {
-      builderTabIdInput.value = '';
-      builderTabNameInput.value = '';
-      builderTabNameInput.focus();
-    } else {
-      const tab = builderTabs.find(t => t.id === tabId);
-      if (tab) {
-        builderTabIdInput.value = tab.id;
-        builderTabNameInput.value = tab.name;
-        builderTabNameInput.focus();
-      }
-    }
-  }
-
-  function showComponentEditor(componentId, tabId) {
-    hideAllEditors();
-    if (builderComponentEditor) builderComponentEditor.classList.remove('hidden');
-    
-    // Populate tab dropdown
-    if (builderComponentTabSelect) {
-      builderComponentTabSelect.innerHTML = '<option value="">Select a tab...</option>' +
-        builderTabs.map(tab => `<option value="${escapeHtml(tab.id)}">${escapeHtml(tab.name)}</option>`).join('');
-    }
-    
-    if (!componentId) {
-      builderComponentIdInput.value = '';
-      builderForm.reset();
-      if (builderComponentTypeSelect) builderComponentTypeSelect.value = 'text';
-      if (builderSheetSelect) builderSheetSelect.value = builderSheets[0] || '';
-      if (builderOptionsSection) builderOptionsSection.classList.add('hidden');
-      if (builderRangeSection) builderRangeSection.classList.add('hidden');
-      if (tabId && builderComponentTabSelect) builderComponentTabSelect.value = tabId;
-      builderLabelInput.focus();
-    } else {
-      const tab = builderTabs.find(t => t.id === tabId);
-      const comp = tab?.components.find(c => c.id === componentId);
-      if (comp) {
-        builderComponentIdInput.value = comp.id;
-        if (builderComponentTabSelect) builderComponentTabSelect.value = tabId;
-        builderLabelInput.value = comp.label || '';
-        ensureSheetOption(comp.sheet || '');
-        if (builderSheetSelect) builderSheetSelect.value = comp.sheet || builderSheets[0] || '';
-        builderCellInput.value = comp.cell || '';
-        const componentType = comp.componentType || 'text';
-        if (builderComponentTypeSelect) builderComponentTypeSelect.value = componentType;
-        if (builderOptionsInput) builderOptionsInput.value = comp.options || '';
-        if (builderMinInput) builderMinInput.value = comp.min ?? 0;
-        if (builderMaxInput) builderMaxInput.value = comp.max ?? 100;
-        if (builderStepInput) builderStepInput.value = comp.step ?? 1;
-        if (builderOptionsSection) builderOptionsSection.classList.toggle('hidden', componentType !== 'dropdown');
-        if (builderRangeSection) builderRangeSection.classList.toggle('hidden', componentType !== 'slider');
-      }
-    }
-  }
-
-  function hideAllEditors() {
-    if (builderTabEditor) builderTabEditor.classList.add('hidden');
-    if (builderComponentEditor) builderComponentEditor.classList.add('hidden');
-    if (builderDefaultMessage) builderDefaultMessage.classList.remove('hidden');
-  }
-
-  function cancelComponentEdit() {
-    hideAllEditors();
-  }
-
-  function handleTabFormSubmit(e) {
-    e.preventDefault();
-    const tabId = builderTabIdInput.value || createComponentId();
-    const tabName = builderTabNameInput.value.trim() || 'Untitled Tab';
-    
-    const existingTab = builderTabs.find(t => t.id === tabId);
-    if (existingTab) {
-      existingTab.name = tabName;
-    } else {
-      builderTabs.push({ id: tabId, name: tabName, components: [] });
-    }
-    
-    hideAllEditors();
-    renderBuilderTree();
   }
 
   async function saveBuilderLayout() {
     if (!builderTarget) return showToast('Select an app to design', true);
-    const schema = { tabs: builderTabs };
+    const schema = { widgets: builderWidgets };
     try {
       const res = await apiFetch(`${apiBase}/apps/ui/save`, {
         method: 'POST',
@@ -1060,34 +1450,37 @@
     if (!owner || !name) return;
     try {
       const schema = await fetchAppSchema(owner, name);
-      renderPreviewComponents(schema?.components || []);
+      renderPreviewComponents(schema?.widgets || schema?.components || []);
       openPreviewModal(owner, name);
     } catch (err) {
       showToast(err.message || 'Unable to preview UI', true);
     }
   }
 
-  function renderPreviewComponents(components) {
+  function renderPreviewComponents(widgets) {
     if (!previewContent || !previewEmpty) return;
-    const normalized = normalizeComponents(components || []);
-    if (!normalized.length) {
+    if (!widgets || !widgets.length) {
       previewContent.innerHTML = '';
       previewEmpty.classList.remove('hidden');
       return;
     }
     previewEmpty.classList.add('hidden');
-    previewContent.innerHTML = normalized.map(previewComponentMarkup).join('');
+    previewContent.innerHTML = widgets.map(w => previewWidgetMarkup(w)).join('');
   }
 
-  function previewComponentMarkup(comp) {
-    const mode = comp.mode || 'display';
-    const inputType = comp.inputType || 'text';
-    const label = escapeHtml(comp.label || comp.cell || 'Field');
-    const location = `${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')}`;
-    if (mode === 'input') {
-      return `<div class="app-ui-field preview"><label>${label}</label><input type="${escapeHtml(inputType)}" disabled placeholder="${location}" /><div class="app-meta">Two-way • ${location}</div></div>`;
+  function previewWidgetMarkup(widget) {
+    const def = WIDGET_TYPES[widget.type] || {};
+    const props = widget.properties || {};
+    const excel = widget.excel || {};
+    const label = escapeHtml(props.label || widget.name || 'Widget');
+    const location = excel.enabled ? `${escapeHtml(excel.sheet || '')}!${escapeHtml(excel.cell || '')}` : 'No binding';
+    
+    if (def.isContainer && widget.children?.length) {
+      const childrenHtml = widget.children.map(c => previewWidgetMarkup(c)).join('');
+      return `<div class="app-ui-container preview"><div class="container-label">${def.icon} ${label}</div><div class="container-children">${childrenHtml}</div></div>`;
     }
-    return `<div class="app-ui-field preview"><label>${label}</label><output>Preview value</output><div class="app-meta">Display • ${location}</div></div>`;
+    
+    return `<div class="app-ui-field preview"><label>${def.icon} ${label}</label><div class="app-meta">${def.label} • ${location}</div></div>`;
   }
 
   function openPreviewModal(owner, name) {
@@ -1415,21 +1808,16 @@
     builderModal.setAttribute('aria-hidden', 'true');
     bodyEl.classList.remove('modal-open');
     builderTarget = null;
-    builderTabs = [];
-    builderComponents = [];
-    hideAllEditors();
-    renderBuilderTree();
+    builderWidgets = [];
+    builderSelectedWidget = null;
+    hidePropertyForm();
+    renderWidgetTree();
     if (builderAppLabel) builderAppLabel.textContent = 'No app';
-    if (builderTreeAppName) builderTreeAppName.textContent = 'Application';
   }
 
   function normalizeComponents(list) {
     if (!Array.isArray(list)) return [];
-    return list.map(item => ({ ...item, id: item.id || createComponentId() }));
-  }
-
-  function createComponentId() {
-    return 'cmp-' + Math.random().toString(36).slice(2, 9);
+    return list.map(item => ({ ...item, id: item.id || createWidgetId() }));
   }
 
   function renderAppIcon(app) {
