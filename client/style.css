@@ -683,7 +683,7 @@ input[type="file"] { padding: 8px; }
   .app-tab-btn { padding: 8px 12px; font-size: 13px; }
 }
 
-/* ===== Enhanced UI Builder ===== */
+/* ===== Enhanced App Builder ===== */
 .builder-layout {
   display: flex;
   flex-direction: column;
