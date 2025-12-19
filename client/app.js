@@ -267,13 +267,6 @@
     if (activeTab === 'admin' && (!role.admin || !signedIn)) setTab('apps');
   }
 
-  qs('#developer-override').addEventListener('click', () => {
-    if (!token) { showToast('Login first', true); return; }
-    developerOverride = true;
-    toggleCreateVisibility();
-    showToast('Developer UI forced for this session');
-  });
-
   if (devModalClose) devModalClose.addEventListener('click', () => closeDevModal(true));
   if (devModalCancel) devModalCancel.addEventListener('click', () => closeDevModal(true));
   if (devModal) {
