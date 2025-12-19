@@ -2244,7 +2244,6 @@
           <h4>${escapeHtml(a.name)}</h4>
           <p>${escapeHtml(description)}</p>
           <div class="app-buttons">
-            <button type="button" data-edit-app="${escapeHtml(a.name)}">Edit</button>
             <button type="button" class="ghost" data-builder-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">App Builder</button>
           </div>
         </div>
