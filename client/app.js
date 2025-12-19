@@ -2241,14 +2241,11 @@
         ? `<img src="data:image/png;base64,${a.image_base64}" alt="${escapeHtml(a.name)}" class="app-card-image" />`
         : `<div class="app-card-image" style="display: grid; place-items: center; font-size: 48px; font-weight: 700; color: var(--accent)">${escapeHtml(a.name.charAt(0).toUpperCase())}</div>`;
       const description = formatDescription(a.description);
-      return `<div class="app-card dev-app-card">
+      return `<div class="app-card dev-app-card" data-builder-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">
         ${imageHtml}
         <div class="app-card-body">
           <h4>${escapeHtml(a.name)}</h4>
           <p>${escapeHtml(description)}</p>
-          <div class="app-buttons">
-            <button type="button" class="ghost" data-builder-app="${escapeHtml(a.name)}" data-owner="${escapeHtml(a.owner)}">App Builder</button>
-          </div>
         </div>
       </div>`;
     }).join('');
