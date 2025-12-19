@@ -2096,14 +2096,16 @@
     const access_group = data.get('access_group').trim();
     const isPublic = data.get('public') === 'on';
     const file = data.get('file');
+    const hasFile = file && file.size > 0;
     const isUpdate = formMode === 'update';
-    if (!name || (!file && !isUpdate)) return showToast('Name and file required', true);
+    if (!name || (!hasFile && !isUpdate)) return showToast('Name and file required', true);
     if (isUpdate && !editingApp) return showToast('Select an app to edit', true);
     try {
       const imageFile = imageInput && imageInput.files ? imageInput.files[0] : null;
       const image_base64 = imageFile ? await resizeImageFile(imageFile) : null;
       if (!isUpdate) {
         const file_base64 = await fileToBase64(file);
+        if (!file_base64) return showToast('Failed to read file', true);
         const payload = { name, description, file_base64, public: isPublic };
         if (access_group) payload.access_group = access_group;
         if (image_base64) payload.image_base64 = image_base64;
@@ -2114,7 +2116,7 @@
         });
         if (!res.ok) throw new Error('Create failed');
         showToast('Application created');
-      } else if (file) {
+      } else if (hasFile) {
         const payload = { name, description, public: isPublic };
         if (access_group) payload.access_group = access_group;
         payload.file_base64 = await fileToBase64(file);
