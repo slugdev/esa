@@ -286,6 +286,29 @@
           <h4 class="properties-title">Properties</h4>
           <div id="builder-no-selection" class="hint">Select a widget to edit its properties.</div>
           
+          <!-- Application Settings Form -->
+          <form id="builder-app-form" class="builder-form hidden">
+            <fieldset class="prop-group">
+              <legend>📦 Application</legend>
+              <label>Name <input type="text" id="prop-app-name" readonly class="readonly"></label>
+              <label>Owner <input type="text" id="prop-app-owner" readonly class="readonly"></label>
+            </fieldset>
+            
+            <fieldset class="prop-group">
+              <legend>Settings</legend>
+              <label>Description <textarea id="prop-app-description" rows="3" placeholder="App description..."></textarea></label>
+              <label class="checkbox inline">
+                <input type="checkbox" id="prop-app-public"> Public (visible to all users)
+              </label>
+              <label>Access Group <input type="text" id="prop-app-access-group" placeholder="Optional group name"></label>
+            </fieldset>
+            
+            <div class="prop-actions">
+              <button type="submit" class="btn-small">Update App</button>
+              <button type="button" id="prop-delete-app" class="ghost btn-small danger">Delete App</button>
+            </div>
+          </form>
+          
           <form id="builder-property-form" class="builder-form hidden">
             <input type="hidden" id="prop-widget-id">
             

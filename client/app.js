@@ -152,6 +152,14 @@
   const propOnclick = qs('#prop-onclick');
   const propTarget = qs('#prop-target');
   const propDeleteWidget = qs('#prop-delete-widget');
+  // Application form elements
+  const builderAppForm = qs('#builder-app-form');
+  const propAppName = qs('#prop-app-name');
+  const propAppOwner = qs('#prop-app-owner');
+  const propAppDescription = qs('#prop-app-description');
+  const propAppPublic = qs('#prop-app-public');
+  const propAppAccessGroup = qs('#prop-app-access-group');
+  const propDeleteApp = qs('#prop-delete-app');
   // Property groups
   const propGroupLabel = qs('#prop-group-label');
   const propGroupSizer = qs('#prop-group-sizer');
@@ -301,8 +309,10 @@
   builderPalette?.addEventListener('click', handlePaletteClick);
   builderTreeRoot?.addEventListener('click', handleWidgetTreeClick);
   builderPropertyForm?.addEventListener('submit', handlePropertyFormSubmit);
+  builderAppForm?.addEventListener('submit', handleAppFormSubmit);
   propExcelEnabled?.addEventListener('change', handleExcelToggle);
   propDeleteWidget?.addEventListener('click', handleDeleteWidget);
+  propDeleteApp?.addEventListener('click', handleDeleteApp);
   builderSaveLayoutBtn?.addEventListener('click', () => saveBuilderLayout());
   
   appUiForm?.addEventListener('change', handleAppFormChange);
@@ -1042,15 +1052,37 @@
   function renderWidgetTree() {
     if (!builderTreeRoot) return;
     
-    if (!builderWidgets.length) {
-      builderTreeRoot.innerHTML = '';
-      builderEmpty?.classList.remove('hidden');
-      return;
-    }
+    const appName = builderTarget?.name || 'Application';
+    const appCollapsed = builderAppCollapsed || false;
+    const appSelected = builderSelectedWidget === 'app-root';
     
+    // Always show app node, even with no widgets
     builderEmpty?.classList.add('hidden');
-    builderTreeRoot.innerHTML = builderWidgets.map(w => renderWidgetNode(w, 0)).join('');
+    
+    const widgetsHtml = builderWidgets.map(w => renderWidgetNode(w, 1)).join('');
+    const emptyHint = !builderWidgets.length 
+      ? '<div class="tree-empty-hint" style="padding-left: 24px; opacity: 0.6; font-size: 12px; margin: 8px 0;">Click a widget in the palette to add it here.</div>' 
+      : '';
+    
+    builderTreeRoot.innerHTML = `
+      <div class="tree-widget-group tree-app-root">
+        <div class="tree-widget-node tree-app-node ${appSelected ? 'selected' : ''}" data-widget-id="app-root">
+          <button type="button" class="tree-expand-btn" data-toggle-app>
+            <span class="tree-expand-icon">${appCollapsed ? '▶' : '▼'}</span>
+          </button>
+          <span class="widget-icon">📦</span>
+          <span class="widget-name">${escapeHtml(appName)}</span>
+          <span class="widget-type">Application</span>
+        </div>
+        <div class="tree-children ${appCollapsed ? 'hidden' : ''}">
+          ${widgetsHtml}
+          ${emptyHint}
+        </div>
+      </div>
+    `;
   }
+
+  let builderAppCollapsed = false;
 
   function renderWidgetNode(widget, depth) {
     const def = WIDGET_TYPES[widget.type] || { icon: '❓', label: widget.type };
@@ -1100,8 +1132,9 @@
       children: []
     };
     
-    // If a container is selected, add as child; otherwise add to root
-    if (builderSelectedWidget) {
+    // If a container widget is selected, add as child; 
+    // if app-root or nothing is selected, add to root
+    if (builderSelectedWidget && builderSelectedWidget !== 'app-root') {
       const parent = findWidgetById(builderWidgets, builderSelectedWidget);
       if (parent && WIDGET_TYPES[parent.type]?.isContainer) {
         parent.children = parent.children || [];
@@ -1166,7 +1199,15 @@
   }
 
   function handleWidgetTreeClick(e) {
-    // Toggle expand/collapse
+    // Toggle app collapse/expand
+    const toggleAppBtn = e.target.closest('[data-toggle-app]');
+    if (toggleAppBtn) {
+      builderAppCollapsed = !builderAppCollapsed;
+      renderWidgetTree();
+      return;
+    }
+    
+    // Toggle widget expand/collapse
     const toggleBtn = e.target.closest('[data-toggle-widget]');
     if (toggleBtn) {
       const widgetId = toggleBtn.dataset.toggleWidget;
@@ -1178,21 +1219,92 @@
       return;
     }
     
-    // Select widget
+    // Select widget or app node
     const node = e.target.closest('.tree-widget-node');
     if (node) {
       const widgetId = node.dataset.widgetId;
       builderSelectedWidget = widgetId;
       renderWidgetTree();
-      const widget = findWidgetById(builderWidgets, widgetId);
-      if (widget) showPropertyForm(widget);
+      
+      if (widgetId === 'app-root') {
+        showAppPropertyForm();
+      } else {
+        const widget = findWidgetById(builderWidgets, widgetId);
+        if (widget) showPropertyForm(widget);
+      }
+    }
+  }
+
+  async function showAppPropertyForm() {
+    if (!builderAppForm || !builderNoSelection) return;
+    
+    // Hide other forms, show app form
+    builderNoSelection.classList.add('hidden');
+    builderPropertyForm?.classList.add('hidden');
+    builderAppForm.classList.remove('hidden');
+    
+    // Find app in cache
+    const app = appsCache.find(a => a.name === builderTarget?.name && a.owner === builderTarget?.owner);
+    
+    if (propAppName) propAppName.value = builderTarget?.name || '';
+    if (propAppOwner) propAppOwner.value = builderTarget?.owner || '';
+    if (propAppDescription) propAppDescription.value = app?.description || '';
+    if (propAppPublic) propAppPublic.checked = app?.public || false;
+    if (propAppAccessGroup) propAppAccessGroup.value = app?.access_group || '';
+  }
+
+  async function handleAppFormSubmit(e) {
+    e.preventDefault();
+    if (!builderTarget) return showToast('No app selected', true);
+    
+    const payload = {
+      description: propAppDescription?.value || '',
+      public: propAppPublic?.checked || false
+    };
+    
+    const accessGroup = propAppAccessGroup?.value?.trim();
+    if (accessGroup) payload.access_group = accessGroup;
+    
+    try {
+      const res = await apiFetch(`${apiBase}/apps/${encodeURIComponent(builderTarget.name)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('Failed to update app');
+      showToast('Application updated');
+      await refreshApps();
+    } catch (err) {
+      showToast(err.message || 'Failed to update app', true);
+    }
+  }
+
+  async function handleDeleteApp() {
+    if (!builderTarget) return showToast('No app selected', true);
+    
+    const confirmMsg = `Are you sure you want to delete "${builderTarget.name}"? This cannot be undone.`;
+    if (!confirm(confirmMsg)) return;
+    
+    try {
+      const res = await apiFetch(`${apiBase}/apps/${encodeURIComponent(builderTarget.name)}`, {
+        method: 'DELETE',
+        headers: authHeaders()
+      });
+      if (!res.ok) throw new Error('Failed to delete app');
+      showToast('Application deleted');
+      closeBuilderModal();
+      await refreshApps();
+    } catch (err) {
+      showToast(err.message || 'Failed to delete app', true);
     }
   }
 
   function showPropertyForm(widget) {
     if (!builderPropertyForm || !builderNoSelection) return;
     
+    // Hide other forms, show widget property form
     builderNoSelection.classList.add('hidden');
+    builderAppForm?.classList.add('hidden');
     builderPropertyForm.classList.remove('hidden');
     
     const def = WIDGET_TYPES[widget.type] || {};
@@ -1384,6 +1496,7 @@
 
   function hidePropertyForm() {
     if (builderPropertyForm) builderPropertyForm.classList.add('hidden');
+    if (builderAppForm) builderAppForm.classList.add('hidden');
     if (builderNoSelection) builderNoSelection.classList.remove('hidden');
   }
 
@@ -1810,8 +1923,9 @@
     builderTarget = null;
     builderWidgets = [];
     builderSelectedWidget = null;
+    builderAppCollapsed = false;
     hidePropertyForm();
-    renderWidgetTree();
+    if (builderTreeRoot) builderTreeRoot.innerHTML = '';
     if (builderAppLabel) builderAppLabel.textContent = 'No app';
   }
 

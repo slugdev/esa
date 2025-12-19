@@ -834,6 +834,18 @@ input[type="file"] { padding: 8px; }
   font-weight: 600;
 }
 
+/* Application root node styling */
+.tree-app-node {
+  background: rgba(90, 179, 255, 0.05);
+  border: 1px solid rgba(90, 179, 255, 0.2);
+  font-weight: 600;
+}
+
+.tree-app-node .widget-type {
+  background: rgba(90, 179, 255, 0.2);
+  color: var(--accent);
+}
+
 .tree-widget-node .widget-icon {
   font-size: 14px;
   width: 20px;
