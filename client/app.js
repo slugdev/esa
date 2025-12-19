@@ -392,8 +392,21 @@
     });
   }
 
-  // Preview click to select widgets
+  // Preview click to select widgets and handle notebook tabs
   builderPreviewContent?.addEventListener('click', (e) => {
+    // Handle notebook tab clicks
+    const tabBtn = e.target.closest('.notebook-tab');
+    if (tabBtn) {
+      const notebookId = tabBtn.dataset.notebookId;
+      const tabIdx = parseInt(tabBtn.dataset.tabIdx, 10);
+      if (notebookId && !isNaN(tabIdx)) {
+        previewNotebookTabs[notebookId] = tabIdx;
+        renderBuilderPreview();
+        return;
+      }
+    }
+    
+    // Handle widget selection
     const previewEl = e.target.closest('[data-preview-id]');
     if (!previewEl) return;
     const widgetId = previewEl.dataset.previewId;
@@ -653,6 +666,27 @@
     
     // Render widget tree
     appUiForm.innerHTML = widgets.map(w => renderWidget(w)).join('');
+    
+    // Add tab switching logic for notebook widgets
+    setupNotebookTabHandlers();
+  }
+
+  function setupNotebookTabHandlers() {
+    appUiForm.querySelectorAll('.app-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.tabTarget;
+        // Find the parent notebook
+        const notebook = btn.closest('.widget-notebook');
+        if (!notebook) return;
+        
+        // Toggle active state within this notebook only
+        notebook.querySelectorAll('.app-tab-btn').forEach(b => b.classList.remove('active'));
+        notebook.querySelectorAll('.app-tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        const panel = notebook.querySelector(`[data-tab-id="${target}"]`);
+        if (panel) panel.classList.add('active');
+      });
+    });
   }
 
   function collectExcelWidgets(widgets) {
@@ -1268,99 +1302,174 @@
     builderPreviewContent.innerHTML = builderWidgets.map(w => renderPreviewWidget(w)).join('');
   }
 
+  function getWidgetStyles(props) {
+    const styles = [];
+    if (props.width && props.width !== 'auto') styles.push(`width: ${props.width}px`);
+    if (props.height && props.height !== 'auto') styles.push(`height: ${props.height}px`);
+    if (props.minWidth) styles.push(`min-width: ${props.minWidth}px`);
+    if (props.minHeight) styles.push(`min-height: ${props.minHeight}px`);
+    if (props.margin) styles.push(`margin: ${props.margin}px`);
+    if (props.padding) styles.push(`padding: ${props.padding}px`);
+    if (props.proportion && props.proportion > 0) styles.push(`flex: ${props.proportion}`);
+    return styles.join('; ');
+  }
+
+  // Track active tab for each notebook in preview
+  let previewNotebookTabs = {};
+
+  function renderPreviewNotebook(widget, selected) {
+    const selectedClass = selected ? ' selected' : '';
+    const children = widget.children || [];
+    
+    // Each child of a notebook is a tab/page (typically panels)
+    // Get the active tab index for this notebook
+    const activeTabIdx = previewNotebookTabs[widget.id] || 0;
+    
+    if (!children.length) {
+      return `<div class="preview-notebook${selectedClass}" data-preview-id="${widget.id}">
+        <div class="notebook-tabs"><div class="notebook-tab-empty">No tabs</div></div>
+        <div class="notebook-content"><div class="preview-empty-hint">(empty notebook)</div></div>
+      </div>`;
+    }
+    
+    // Build tabs from children - use child's label or name for tab title
+    const tabsHtml = children.map((child, idx) => {
+      const childProps = child.properties || {};
+      const tabLabel = escapeHtml(childProps.label || child.name || `Tab ${idx + 1}`);
+      const activeClass = idx === activeTabIdx ? ' active' : '';
+      return `<button type="button" class="notebook-tab${activeClass}" data-notebook-id="${widget.id}" data-tab-idx="${idx}">${tabLabel}</button>`;
+    }).join('');
+    
+    // Render only the active tab's content
+    const activeChild = children[activeTabIdx];
+    const contentHtml = activeChild ? renderPreviewWidget(activeChild) : '';
+    
+    return `<div class="preview-notebook${selectedClass}" data-preview-id="${widget.id}">
+      <div class="notebook-tabs">${tabsHtml}</div>
+      <div class="notebook-content">${contentHtml}</div>
+    </div>`;
+  }
+
   function renderPreviewWidget(widget) {
     const def = WIDGET_TYPES[widget.type] || { icon: '❓', label: widget.type };
     const props = widget.properties || {};
     const label = escapeHtml(props.label || widget.name || def.label);
     const selected = builderSelectedWidget === widget.id;
     const selectedClass = selected ? ' selected' : '';
+    const widgetStyles = getWidgetStyles(props);
+    const styleAttr = widgetStyles ? ` style="${widgetStyles}"` : '';
     
-    // Container widgets
+    // Special handling for notebook (tabbed container)
+    if (widget.type === 'notebook') {
+      return renderPreviewNotebook(widget, selected);
+    }
+    
+    // Container/Sizer widgets - render as invisible layout containers
     if (def.isContainer) {
       const childrenHtml = widget.children?.length 
         ? widget.children.map(c => renderPreviewWidget(c)).join('') 
-        : '<div class="preview-empty-container">(empty)</div>';
+        : '';
       
-      // Determine layout direction
-      let layoutClass = '';
-      let gridStyle = '';
-      if (widget.type === 'boxsizer-h') {
-        layoutClass = ' horizontal';
+      // Determine layout type and styles
+      let containerClass = 'preview-sizer';
+      let containerStyles = [];
+      
+      if (widget.type === 'boxsizer-v') {
+        containerClass += ' sizer-vertical';
+        if (props.vgap) containerStyles.push(`gap: ${props.vgap}px`);
+      } else if (widget.type === 'boxsizer-h') {
+        containerClass += ' sizer-horizontal';
+        if (props.hgap) containerStyles.push(`gap: ${props.hgap}px`);
       } else if (widget.type === 'gridsizer') {
-        layoutClass = ' grid';
+        containerClass += ' sizer-grid';
         const cols = props.cols || 2;
-        gridStyle = ` style="grid-template-columns: repeat(${cols}, 1fr);"`;
+        containerStyles.push(`grid-template-columns: repeat(${cols}, 1fr)`);
+        if (props.hgap) containerStyles.push(`column-gap: ${props.hgap}px`);
+        if (props.vgap) containerStyles.push(`row-gap: ${props.vgap}px`);
+      } else if (widget.type === 'panel') {
+        containerClass = 'preview-panel';
+        containerStyles.push('flex-direction: column');
+      } else if (widget.type === 'scrolled') {
+        containerClass = 'preview-scrolled';
       }
       
-      return `<div class="preview-container${selectedClass}" data-preview-id="${widget.id}">
-        <div class="preview-container-label">${def.icon} ${label}</div>
-        <div class="preview-container-children${layoutClass}"${gridStyle}>
-          ${childrenHtml}
-        </div>
+      // Add widget-level styles
+      if (props.margin) containerStyles.push(`margin: ${props.margin}px`);
+      if (props.padding) containerStyles.push(`padding: ${props.padding}px`);
+      if (props.proportion && props.proportion > 0) containerStyles.push(`flex: ${props.proportion}`);
+      
+      const styleStr = containerStyles.length ? ` style="${containerStyles.join('; ')}"` : '';
+      
+      // Empty state for visible containers
+      const emptyHint = !widget.children?.length && (widget.type === 'panel' || widget.type === 'notebook') 
+        ? '<div class="preview-empty-hint">(empty)</div>' : '';
+      
+      return `<div class="${containerClass}${selectedClass}" data-preview-id="${widget.id}"${styleStr}>
+        ${childrenHtml}${emptyHint}
       </div>`;
     }
     
-    // Non-container widgets - render as interactive controls
+    // Non-container widgets - render as actual controls
     const controlHtml = renderPreviewControl(widget, def, props, label);
     
-    return `<div class="preview-widget${selectedClass}" data-preview-id="${widget.id}">
-      ${props.label ? `<div class="preview-widget-label">${label}</div>` : ''}
-      <div class="preview-widget-control">${controlHtml}</div>
+    return `<div class="preview-widget${selectedClass}" data-preview-id="${widget.id}"${styleAttr}>
+      ${controlHtml}
     </div>`;
   }
 
   function renderPreviewControl(widget, def, props, label) {
     const placeholder = escapeHtml(props.placeholder || '');
     const options = (props.options || '').split(',').map(o => o.trim()).filter(Boolean);
+    const labelHtml = props.label ? `<label class="preview-label">${escapeHtml(props.label)}</label>` : '';
     
     switch (widget.type) {
       case 'textinput':
-        return `<input type="text" placeholder="${placeholder || label}" disabled>`;
+        return `${labelHtml}<input type="text" placeholder="${placeholder || 'Enter text...'}">`;
       case 'number':
       case 'spinctrl':
-        return `<input type="number" value="${props.min || 0}" min="${props.min || 0}" max="${props.max || 100}" disabled>`;
+        return `${labelHtml}<input type="number" value="${props.default || props.min || 0}" min="${props.min || 0}" max="${props.max || 100}">`;
       case 'textarea':
-        return `<textarea rows="3" placeholder="${placeholder}" disabled></textarea>`;
+        return `${labelHtml}<textarea rows="3" placeholder="${placeholder || 'Enter text...'}"></textarea>`;
       case 'dropdown':
-        const opts = options.length ? options : ['Option 1', 'Option 2'];
-        return `<select disabled>${opts.map(o => `<option>${escapeHtml(o)}</option>`).join('')}</select>`;
+        const opts = options.length ? options : ['Select...'];
+        return `${labelHtml}<select>${opts.map(o => `<option>${escapeHtml(o)}</option>`).join('')}</select>`;
       case 'checkbox':
-        return `<label style="display: flex; align-items: center; gap: 6px;"><input type="checkbox" disabled> ${label}</label>`;
+        return `<label class="preview-checkbox"><input type="checkbox"> ${escapeHtml(props.label || label)}</label>`;
       case 'radio':
         const radioOpts = options.length ? options : ['Option 1', 'Option 2'];
-        return radioOpts.map(o => `<label style="display: flex; align-items: center; gap: 4px; margin: 2px 0;"><input type="radio" name="${widget.id}" disabled> ${escapeHtml(o)}</label>`).join('');
+        return `<div class="preview-radio-group">${radioOpts.map(o => `<label class="preview-radio"><input type="radio" name="${widget.id}"> ${escapeHtml(o)}</label>`).join('')}</div>`;
       case 'slider':
-        return `<input type="range" min="${props.min || 0}" max="${props.max || 100}" value="${(props.min || 0) + ((props.max || 100) - (props.min || 0)) / 2}" disabled>`;
+        return `${labelHtml}<input type="range" min="${props.min || 0}" max="${props.max || 100}" value="${props.default || ((props.min || 0) + (props.max || 100)) / 2}">`;
       case 'datepicker':
-        return `<input type="date" disabled>`;
+        return `${labelHtml}<input type="date">`;
       case 'colorpicker':
-        return `<input type="color" value="#5ab3ff" disabled>`;
+        return `${labelHtml}<input type="color" value="#5ab3ff">`;
       case 'button':
-        return `<button type="button">${label}</button>`;
+        return `<button type="button" class="preview-button">${escapeHtml(props.label || label)}</button>`;
       case 'togglebtn':
-        return `<button type="button" style="opacity: 0.7;">${label}</button>`;
+        return `<button type="button" class="preview-button toggle">${escapeHtml(props.label || label)}</button>`;
       case 'link':
-        return `<a href="#" style="color: var(--accent);">${label}</a>`;
+        return `<a href="#" class="preview-link">${escapeHtml(props.label || label)}</a>`;
       case 'label':
-        return `<span style="font-size: 13px;">${label}</span>`;
+        return `<span class="preview-text">${escapeHtml(props.label || label)}</span>`;
       case 'output':
-        return `<span style="font-family: monospace; background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px;">...</span>`;
+        return `${labelHtml}<span class="preview-output">—</span>`;
       case 'image':
-        return `<div style="width: 100%; height: 80px; background: rgba(90,179,255,0.1); border-radius: 4px; display: flex; align-items: center; justify-content: center;">🖼️ Image</div>`;
+        return `<div class="preview-image">🖼️</div>`;
       case 'gauge':
-        return `<progress value="${props.min || 30}" max="${props.max || 100}" style="width: 100%;"></progress>`;
+        return `${labelHtml}<progress value="${props.default || 50}" max="${props.max || 100}"></progress>`;
       case 'separator':
-        return `<hr style="border: none; border-top: 1px solid rgba(90,179,255,0.3); margin: 8px 0;">`;
+        return `<hr class="preview-separator">`;
       case 'spacer':
-        return `<div style="height: 20px;"></div>`;
+        return `<div class="preview-spacer"></div>`;
       case 'datagrid':
-        return `<div style="padding: 12px; background: rgba(0,0,0,0.2); border-radius: 4px; text-align: center;">📊 DataGrid</div>`;
+        return `<div class="preview-datagrid"><table><tr><th>A</th><th>B</th><th>C</th></tr><tr><td>1</td><td>2</td><td>3</td></tr><tr><td>4</td><td>5</td><td>6</td></tr></table></div>`;
       case 'chart':
-        return `<div style="padding: 20px; background: rgba(0,0,0,0.2); border-radius: 4px; text-align: center;">📈 Chart</div>`;
+        return `<div class="preview-chart">📈</div>`;
       case 'formula':
-        return `<span style="font-family: monospace;">∑ Formula Result</span>`;
+        return `${labelHtml}<span class="preview-formula">= result</span>`;
       default:
-        return `<span>${def.icon} ${label}</span>`;
+        return `<span>${def.icon} ${escapeHtml(props.label || label)}</span>`;
     }
   }
 
