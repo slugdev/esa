@@ -1385,7 +1385,7 @@ bool is_safe_name(const std::string &name)
         return false;
     for (char c : name)
     {
-        if (!(isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == '.'))
+        if (!(isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-' || c == '.' || c == ' '))
             return false;
     }
     if (name.find("..") != std::string::npos)

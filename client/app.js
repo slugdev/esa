@@ -2099,6 +2099,9 @@
     const hasFile = file && file.size > 0;
     const isUpdate = formMode === 'update';
     if (!name || (!hasFile && !isUpdate)) return showToast('Name and file required', true);
+    if (!isUpdate && !/^[a-zA-Z0-9_\-. ]+$/.test(name)) {
+      return showToast('App name can only contain letters, numbers, spaces, underscores, hyphens, and periods', true);
+    }
     if (isUpdate && !editingApp) return showToast('Select an app to edit', true);
     try {
       const imageFile = imageInput && imageInput.files ? imageInput.files[0] : null;
@@ -2109,12 +2112,15 @@
         const payload = { name, description, file_base64, public: isPublic };
         if (access_group) payload.access_group = access_group;
         if (image_base64) payload.image_base64 = image_base64;
+        console.log('Creating app with payload:', { name, description, hasFile: !!file_base64, fileLen: file_base64?.length, public: isPublic, access_group });
         const res = await apiFetch(`${apiBase}/apps`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify(payload)
         });
-        if (!res.ok) throw new Error('Create failed');
+        const responseText = await res.clone().text();
+        console.log('Server response:', res.status, responseText);
+        if (!res.ok) throw new Error(responseText || 'Create failed');
         showToast('Application created');
       } else if (hasFile) {
         const payload = { name, description, public: isPublic };
