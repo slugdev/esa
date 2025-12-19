@@ -779,55 +779,54 @@
     const id = widget.id;
     const hasExcel = excel.enabled && excel.sheet && excel.cell;
     const cellRef = hasExcel ? `${escapeHtml(excel.sheet)}!${escapeHtml(excel.cell)}` : '';
-    const placeholder = props.placeholder || cellRef || '';
-    const metaHtml = hasExcel ? `<div class="app-meta">${cellRef}</div>` : '';
+    const placeholder = props.placeholder || '';
     
     switch (widget.type) {
       case 'label':
         return `<div class="app-ui-field"${styleAttr}><span class="widget-label">${label}</span></div>`;
       
       case 'output':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><output data-component="${id}">—</output>${metaHtml}</div>`;
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><output data-component="${id}">—</output></div>`;
       
       case 'textinput':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="text" placeholder="${escapeHtml(placeholder)}" />${metaHtml}</div>`;
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="text" placeholder="${escapeHtml(placeholder)}" /></div>`;
       
       case 'number':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="number" placeholder="${escapeHtml(placeholder)}" />${metaHtml}</div>`;
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="number" placeholder="${escapeHtml(placeholder)}" /></div>`;
       
       case 'textarea':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><textarea data-component="${id}" rows="4" placeholder="${escapeHtml(placeholder)}"></textarea>${metaHtml}</div>`;
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><textarea data-component="${id}" rows="4" placeholder="${escapeHtml(placeholder)}"></textarea></div>`;
       
       case 'dropdown':
         const options = (props.options || '').split(',').map(o => o.trim()).filter(Boolean);
         const optionsHtml = options.map(opt => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join('');
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><select data-component="${id}"><option value="">Select...</option>${optionsHtml}</select>${metaHtml}</div>`;
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><select data-component="${id}"><option value="">Select...</option>${optionsHtml}</select></div>`;
       
       case 'checkbox':
-        return `<div class="app-ui-field checkbox"${styleAttr}><label><input type="checkbox" data-component="${id}" /> ${label}</label>${metaHtml}</div>`;
+        return `<div class="app-ui-field checkbox"${styleAttr}><label><input type="checkbox" data-component="${id}" /> ${label}</label></div>`;
       
       case 'radio':
         const radioOpts = (props.options || '').split(',').map(o => o.trim()).filter(Boolean);
         const radioHtml = radioOpts.map((opt, i) => `<label class="radio-option"><input type="radio" name="radio-${id}" value="${escapeHtml(opt)}" data-component="${id}" /> ${escapeHtml(opt)}</label>`).join('');
-        return `<div class="app-ui-field radio"${styleAttr}><div class="radio-label">${label}</div><div class="radio-group">${radioHtml}</div>${metaHtml}</div>`;
+        return `<div class="app-ui-field radio"${styleAttr}><div class="radio-label">${label}</div><div class="radio-group">${radioHtml}</div></div>`;
       
       case 'slider':
         const min = props.min ?? 0;
         const max = props.max ?? 100;
         const step = props.step ?? 1;
-        return `<div class="app-ui-field"${styleAttr}><label>${label} <span class="slider-value" data-value-for="${id}">—</span></label><input type="range" data-component="${id}" min="${min}" max="${max}" step="${step}" />${metaHtml}</div>`;
+        return `<div class="app-ui-field"${styleAttr}><label>${label} <span class="slider-value" data-value-for="${id}">—</span></label><input type="range" data-component="${id}" min="${min}" max="${max}" step="${step}" /></div>`;
       
       case 'spinctrl':
         const spinMin = props.min ?? 0;
         const spinMax = props.max ?? 100;
         const spinStep = props.step ?? 1;
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="number" min="${spinMin}" max="${spinMax}" step="${spinStep}" />${metaHtml}</div>`;
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="number" min="${spinMin}" max="${spinMax}" step="${spinStep}" /></div>`;
       
       case 'datepicker':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="date" />${metaHtml}</div>`;
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="date" /></div>`;
       
       case 'colorpicker':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="color" />${metaHtml}</div>`;
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="color" /></div>`;
       
       case 'button':
         return `<div class="app-ui-field"${styleAttr}><button type="button" class="widget-button" data-component="${id}" data-action="${escapeHtml(props.onclick || '')}">${label}</button></div>`;
@@ -842,7 +841,7 @@
       case 'gauge':
         const gaugeMin = props.min ?? 0;
         const gaugeMax = props.max ?? 100;
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><progress data-component="${id}" min="${gaugeMin}" max="${gaugeMax}" value="0"></progress>${metaHtml}</div>`;
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><progress data-component="${id}" min="${gaugeMin}" max="${gaugeMax}" value="0"></progress></div>`;
       
       case 'image':
         return `<div class="app-ui-field"${styleAttr}><img class="widget-image" data-component="${id}" src="" alt="${label}" /></div>`;
@@ -855,13 +854,13 @@
         return `<div class="widget-spacer" style="height: ${spacerH};"${styleAttr}></div>`;
       
       case 'datagrid':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><div class="widget-datagrid" data-component="${id}">Loading data...</div>${metaHtml}</div>`;
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><div class="widget-datagrid" data-component="${id}">Loading data...</div></div>`;
       
       case 'chart':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><div class="widget-chart" data-component="${id}">Chart placeholder</div>${metaHtml}</div>`;
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><div class="widget-chart" data-component="${id}">Chart placeholder</div></div>`;
       
       case 'formula':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><output class="widget-formula" data-component="${id}">—</output>${metaHtml}</div>`;
+        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><output class="widget-formula" data-component="${id}">—</output></div>`;
       
       default:
         return `<div class="app-ui-field"${styleAttr}><label>${label}</label><span>Unknown widget type: ${widget.type}</span></div>`;
@@ -932,11 +931,11 @@
     const cellRef = `${escapeHtml(comp.sheet || '')}!${escapeHtml(comp.cell || '')}`;
     
     if (type === 'display') {
-      return `<div class="app-ui-field"><label>${label}</label><output data-component="${comp.id}">—</output><div class="app-meta">${cellRef}</div></div>`;
+      return `<div class="app-ui-field"><label>${label}</label><output data-component="${comp.id}">—</output></div>`;
     }
     
     if (type === 'textarea') {
-      return `<div class="app-ui-field"><label>${label}</label><textarea data-component="${comp.id}" rows="4" placeholder="${cellRef}"></textarea></div>`;
+      return `<div class="app-ui-field"><label>${label}</label><textarea data-component="${comp.id}" rows="4"></textarea></div>`;
     }
     
     if (type === 'dropdown') {
@@ -949,18 +948,18 @@
       const min = comp.min ?? 0;
       const max = comp.max ?? 100;
       const step = comp.step ?? 1;
-      return `<div class="app-ui-field"><label>${label} <span class="slider-value" data-value-for="${comp.id}">—</span></label><input type="range" data-component="${comp.id}" min="${min}" max="${max}" step="${step}" /><div class="app-meta">${cellRef}</div></div>`;
+      return `<div class="app-ui-field"><label>${label} <span class="slider-value" data-value-for="${comp.id}">—</span></label><input type="range" data-component="${comp.id}" min="${min}" max="${max}" step="${step}" /></div>`;
     }
     
     if (type === 'checkbox') {
-      return `<div class="app-ui-field checkbox"><label><input type="checkbox" data-component="${comp.id}" /> ${label}</label><div class="app-meta">${cellRef}</div></div>`;
+      return `<div class="app-ui-field checkbox"><label><input type="checkbox" data-component="${comp.id}" /> ${label}</label></div>`;
     }
     
     if (type === 'number') {
-      return `<div class="app-ui-field"><label>${label}</label><input data-component="${comp.id}" type="number" placeholder="${cellRef}" /></div>`;
+      return `<div class="app-ui-field"><label>${label}</label><input data-component="${comp.id}" type="number" /></div>`;
     }
     
-    return `<div class="app-ui-field"><label>${label}</label><input data-component="${comp.id}" type="text" placeholder="${cellRef}" /></div>`;
+    return `<div class="app-ui-field"><label>${label}</label><input data-component="${comp.id}" type="text" /></div>`;
   }
 
   function handleAppFormChange(e) {
