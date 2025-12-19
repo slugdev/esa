@@ -14,6 +14,7 @@
   let builderWidgets = [];
   let builderSelectedWidget = null;
   let builderSheets = [];
+  let builderSavedState = null;
   const qs = (sel) => document.querySelector(sel);
   const toastEl = qs('#toast');
 
@@ -1094,6 +1095,7 @@
       }
       
       builderSelectedWidget = null;
+      builderSavedState = JSON.stringify(builderWidgets);
       setSheetOptions(sheets);
       if (builderAppLabel) builderAppLabel.textContent = `${owner}/${name}`;
       renderWidgetTree();
@@ -1272,6 +1274,8 @@
     
     // Add dropdown for containers, delete button for all widgets
     const addDropdown = isContainer ? renderAddWidgetDropdown(widget.id, widget.type) : '';
+    const moveUpBtn = `<button type="button" class="tree-move-btn" data-move-widget="${widget.id}" data-direction="up" title="Move up">↑</button>`;
+    const moveDownBtn = `<button type="button" class="tree-move-btn" data-move-widget="${widget.id}" data-direction="down" title="Move down">↓</button>`;
     const deleteBtn = `<button type="button" class="tree-delete-btn" data-delete-widget="${widget.id}" title="Delete widget">×</button>`;
     
     return `<div class="tree-widget-group">
@@ -1283,6 +1287,8 @@
         <span class="widget-name">${escapeHtml(widget.name || def.label)}</span>
         <span class="widget-type">${escapeHtml(def.label)}</span>
         <div class="tree-node-actions">
+          ${moveUpBtn}
+          ${moveDownBtn}
           ${addDropdown}
           ${deleteBtn}
         </div>
@@ -1522,6 +1528,35 @@
     return false;
   }
 
+  function moveWidgetInSiblings(widgetId, direction) {
+    // Find the widget and its parent array
+    function findWidgetAndSiblings(widgets, id) {
+      for (let i = 0; i < widgets.length; i++) {
+        if (widgets[i].id === id) {
+          return { siblings: widgets, index: i };
+        }
+        if (widgets[i].children) {
+          const result = findWidgetAndSiblings(widgets[i].children, id);
+          if (result) return result;
+        }
+      }
+      return null;
+    }
+    
+    const result = findWidgetAndSiblings(builderWidgets, widgetId);
+    if (!result) return;
+    
+    const { siblings, index } = result;
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    // Check bounds
+    if (newIndex < 0 || newIndex >= siblings.length) return;
+    
+    // Swap positions
+    [siblings[index], siblings[newIndex]] = [siblings[newIndex], siblings[index]];
+    renderWidgetTree();
+  }
+
   function handleWidgetTreeClick(e) {
     // Toggle app collapse/expand
     const toggleAppBtn = e.target.closest('[data-toggle-app]');
@@ -1540,6 +1575,16 @@
         widget.collapsed = !widget.collapsed;
         renderWidgetTree();
       }
+      return;
+    }
+    
+    // Handle move button click
+    const moveBtn = e.target.closest('[data-move-widget]');
+    if (moveBtn) {
+      e.stopPropagation();
+      const widgetId = moveBtn.dataset.moveWidget;
+      const direction = moveBtn.dataset.direction;
+      moveWidgetInSiblings(widgetId, direction);
       return;
     }
     
@@ -1677,7 +1722,7 @@
       });
       if (!res.ok) throw new Error('Failed to delete app');
       showToast('Application deleted');
-      closeBuilderModal();
+      closeBuilderModal(true);
       await refreshApps();
     } catch (err) {
       showToast(err.message || 'Failed to delete app', true);
@@ -1935,12 +1980,16 @@
         body: JSON.stringify({ owner: builderTarget.owner, name: builderTarget.name, schema_json: JSON.stringify(schema) })
       });
       if (!res.ok) throw new Error('Failed to save layout');
+      builderSavedState = JSON.stringify(builderWidgets);
       showToast('Layout saved');
-      closeBuilderModal();
-      await refreshApps();
     } catch (err) {
       showToast(err.message || 'Failed to save layout', true);
     }
+  }
+
+  function hasUnsavedBuilderChanges() {
+    if (!builderSavedState) return builderWidgets.length > 0;
+    return JSON.stringify(builderWidgets) !== builderSavedState;
   }
 
   async function previewAppUi(owner, name) {
@@ -2296,8 +2345,13 @@
     bodyEl.classList.add('modal-open');
   }
 
-  function closeBuilderModal() {
+  function closeBuilderModal(force = false) {
     if (!builderModal) return;
+    if (!force && hasUnsavedBuilderChanges()) {
+      if (!confirm('You have unsaved changes. Are you sure you want to close the App Builder?')) {
+        return;
+      }
+    }
     builderModal.classList.add('hidden');
     builderModal.setAttribute('aria-hidden', 'true');
     bodyEl.classList.remove('modal-open');
@@ -2305,6 +2359,7 @@
     builderWidgets = [];
     builderSelectedWidget = null;
     builderAppCollapsed = false;
+    builderSavedState = null;
     hidePropertyForm();
     if (builderTreeRoot) builderTreeRoot.innerHTML = '';
     if (builderAppLabel) builderAppLabel.textContent = 'No app';

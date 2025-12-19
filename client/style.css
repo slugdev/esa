@@ -1002,6 +1002,30 @@ input[type="file"] { padding: 8px; }
   color: #ff6464;
 }
 
+.tree-move-btn {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid rgba(90, 179, 255, 0.25);
+  color: rgba(90, 179, 255, 0.6);
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 1;
+  transition: all 0.15s;
+  padding: 0;
+}
+
+.tree-move-btn:hover {
+  background: rgba(90, 179, 255, 0.15);
+  border-color: rgba(90, 179, 255, 0.5);
+  color: var(--accent);
+}
+
 .tree-add-widget {
   background: rgba(6, 13, 26, 0.95);
   border: 1px solid rgba(90, 179, 255, 0.3);
