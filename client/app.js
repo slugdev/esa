@@ -775,76 +775,80 @@
   }
 
   function renderLeafWidget(widget, def, props, excel, styleAttr) {
-    const label = escapeHtml(props.label || widget.name || 'Widget');
+    const label = escapeHtml(props.label || widget.name || def.label);
     const id = widget.id;
     const hasExcel = excel.enabled && excel.sheet && excel.cell;
-    const cellRef = hasExcel ? `${escapeHtml(excel.sheet)}!${escapeHtml(excel.cell)}` : '';
-    const placeholder = props.placeholder || '';
+    const placeholder = escapeHtml(props.placeholder || '');
+    const options = (props.options || '').split(',').map(o => o.trim()).filter(Boolean);
+    // Only show label if explicitly set in properties
+    const labelHtml = props.label ? `<label class="widget-field-label">${escapeHtml(props.label)}</label>` : '';
     
     switch (widget.type) {
       case 'label':
-        return `<div class="app-ui-field"${styleAttr}><span class="widget-label">${label}</span></div>`;
+        return `<div class="app-widget"${styleAttr}><span class="widget-label">${label}</span></div>`;
       
       case 'output':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><output data-component="${id}">—</output></div>`;
+        return `<div class="app-widget"${styleAttr}>${labelHtml}<output data-component="${id}" class="widget-output">—</output></div>`;
       
       case 'textinput':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="text" placeholder="${escapeHtml(placeholder)}" /></div>`;
+        return `<div class="app-widget"${styleAttr}>${labelHtml}<input data-component="${id}" type="text" placeholder="${placeholder || 'Enter text...'}" /></div>`;
       
       case 'number':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="number" placeholder="${escapeHtml(placeholder)}" /></div>`;
+        return `<div class="app-widget"${styleAttr}>${labelHtml}<input data-component="${id}" type="number" placeholder="${placeholder}" min="${props.min || ''}" max="${props.max || ''}" /></div>`;
       
       case 'textarea':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><textarea data-component="${id}" rows="4" placeholder="${escapeHtml(placeholder)}"></textarea></div>`;
+        return `<div class="app-widget"${styleAttr}>${labelHtml}<textarea data-component="${id}" rows="3" placeholder="${placeholder || 'Enter text...'}"></textarea></div>`;
       
       case 'dropdown':
-        const options = (props.options || '').split(',').map(o => o.trim()).filter(Boolean);
-        const optionsHtml = options.map(opt => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join('');
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><select data-component="${id}"><option value="">Select...</option>${optionsHtml}</select></div>`;
+        const optsHtml = options.length 
+          ? options.map(opt => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join('')
+          : '';
+        return `<div class="app-widget"${styleAttr}>${labelHtml}<select data-component="${id}"><option value="">Select...</option>${optsHtml}</select></div>`;
       
       case 'checkbox':
-        return `<div class="app-ui-field checkbox"${styleAttr}><label><input type="checkbox" data-component="${id}" /> ${label}</label></div>`;
+        return `<div class="app-widget checkbox"${styleAttr}><label><input type="checkbox" data-component="${id}" /> ${label}</label></div>`;
       
       case 'radio':
-        const radioOpts = (props.options || '').split(',').map(o => o.trim()).filter(Boolean);
-        const radioHtml = radioOpts.map((opt, i) => `<label class="radio-option"><input type="radio" name="radio-${id}" value="${escapeHtml(opt)}" data-component="${id}" /> ${escapeHtml(opt)}</label>`).join('');
-        return `<div class="app-ui-field radio"${styleAttr}><div class="radio-label">${label}</div><div class="radio-group">${radioHtml}</div></div>`;
+        const radioOpts = options.length ? options : ['Option 1', 'Option 2'];
+        const radioHtml = radioOpts.map(opt => `<label class="radio-option"><input type="radio" name="radio-${id}" value="${escapeHtml(opt)}" data-component="${id}" /> ${escapeHtml(opt)}</label>`).join('');
+        return `<div class="app-widget radio"${styleAttr}><div class="radio-group">${radioHtml}</div></div>`;
       
       case 'slider':
         const min = props.min ?? 0;
         const max = props.max ?? 100;
         const step = props.step ?? 1;
-        return `<div class="app-ui-field"${styleAttr}><label>${label} <span class="slider-value" data-value-for="${id}">—</span></label><input type="range" data-component="${id}" min="${min}" max="${max}" step="${step}" /></div>`;
+        const sliderDefault = props.default ?? ((min + max) / 2);
+        return `<div class="app-widget"${styleAttr}>${labelHtml}<input type="range" data-component="${id}" min="${min}" max="${max}" step="${step}" value="${sliderDefault}" /></div>`;
       
       case 'spinctrl':
         const spinMin = props.min ?? 0;
         const spinMax = props.max ?? 100;
         const spinStep = props.step ?? 1;
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="number" min="${spinMin}" max="${spinMax}" step="${spinStep}" /></div>`;
+        return `<div class="app-widget"${styleAttr}>${labelHtml}<input data-component="${id}" type="number" min="${spinMin}" max="${spinMax}" step="${spinStep}" value="${props.default || spinMin}" /></div>`;
       
       case 'datepicker':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="date" /></div>`;
+        return `<div class="app-widget"${styleAttr}>${labelHtml}<input data-component="${id}" type="date" /></div>`;
       
       case 'colorpicker':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><input data-component="${id}" type="color" /></div>`;
+        return `<div class="app-widget"${styleAttr}>${labelHtml}<input data-component="${id}" type="color" value="#5ab3ff" /></div>`;
       
       case 'button':
-        return `<div class="app-ui-field"${styleAttr}><button type="button" class="widget-button" data-component="${id}" data-action="${escapeHtml(props.onclick || '')}">${label}</button></div>`;
+        return `<div class="app-widget"${styleAttr}><button type="button" class="widget-button" data-component="${id}" data-action="${escapeHtml(props.onclick || '')}">${label}</button></div>`;
       
       case 'togglebtn':
-        return `<div class="app-ui-field"${styleAttr}><button type="button" class="widget-toggle" data-component="${id}">${label}</button></div>`;
+        return `<div class="app-widget"${styleAttr}><button type="button" class="widget-toggle" data-component="${id}">${label}</button></div>`;
       
       case 'link':
         const href = props.target || '#';
-        return `<div class="app-ui-field"${styleAttr}><a href="${escapeHtml(href)}" class="widget-link" data-component="${id}">${label}</a></div>`;
+        return `<div class="app-widget"${styleAttr}><a href="${escapeHtml(href)}" class="widget-link" data-component="${id}">${label}</a></div>`;
       
       case 'gauge':
         const gaugeMin = props.min ?? 0;
         const gaugeMax = props.max ?? 100;
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><progress data-component="${id}" min="${gaugeMin}" max="${gaugeMax}" value="0"></progress></div>`;
+        return `<div class="app-widget"${styleAttr}>${labelHtml}<progress data-component="${id}" value="${props.default || 50}" max="${gaugeMax}"></progress></div>`;
       
       case 'image':
-        return `<div class="app-ui-field"${styleAttr}><img class="widget-image" data-component="${id}" src="" alt="${label}" /></div>`;
+        return `<div class="app-widget"${styleAttr}><div class="widget-image" data-component="${id}">🖼️</div></div>`;
       
       case 'separator':
         return `<hr class="widget-separator"${styleAttr} />`;
@@ -854,16 +858,16 @@
         return `<div class="widget-spacer" style="height: ${spacerH};"${styleAttr}></div>`;
       
       case 'datagrid':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><div class="widget-datagrid" data-component="${id}">Loading data...</div></div>`;
+        return `<div class="app-widget"${styleAttr}><div class="widget-datagrid" data-component="${id}"><table><tr><th>A</th><th>B</th><th>C</th></tr><tr><td>1</td><td>2</td><td>3</td></tr></table></div></div>`;
       
       case 'chart':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><div class="widget-chart" data-component="${id}">Chart placeholder</div></div>`;
+        return `<div class="app-widget"${styleAttr}><div class="widget-chart" data-component="${id}">📈</div></div>`;
       
       case 'formula':
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><output class="widget-formula" data-component="${id}">—</output></div>`;
+        return `<div class="app-widget"${styleAttr}>${labelHtml}<output class="widget-formula" data-component="${id}">= result</output></div>`;
       
       default:
-        return `<div class="app-ui-field"${styleAttr}><label>${label}</label><span>Unknown widget type: ${widget.type}</span></div>`;
+        return `<div class="app-widget"${styleAttr}><span>${def.icon} ${label}</span></div>`;
     }
   }
 
@@ -1233,7 +1237,7 @@
           <button type="button" class="tree-expand-btn" data-toggle-app>
             <span class="tree-expand-icon">${appCollapsed ? '▶' : '▼'}</span>
           </button>
-          <span class="widget-icon">📦</span>
+          <span class="widget-icon">�️</span>
           <span class="widget-name">${escapeHtml(appName)}</span>
           <span class="widget-type">Application</span>
           <div class="tree-node-actions">
