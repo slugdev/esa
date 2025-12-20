@@ -657,7 +657,7 @@
         // Remove quotes if present (from JSON)
         el.value = value.replace(/^"|"$/g, '');
       } else {
-        el.value = value ?? '';
+        el.value = '';
       }
     } else {
       el.value = value ?? '';
@@ -2007,7 +2007,12 @@
     const widgetId = propWidgetId?.value;
     if (!widgetId) return;
     
-    if (!confirm('Delete this widget and all its children?')) return;
+    // Find the widget to check if it has children
+    const widget = findWidgetById(builderWidgets, widgetId);
+    const hasChildren = widget?.children && widget.children.length > 0;
+    
+    // Only ask for confirmation if widget has children
+    if (hasChildren && !confirm('Delete this widget and all its children?')) return;
     
     removeWidgetById(builderWidgets, widgetId);
     builderSelectedWidget = null;
