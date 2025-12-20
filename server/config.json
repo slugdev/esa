@@ -1,6 +1,17 @@
 {
   "port": 8080,
   "excel_instances": 2,
-  "users": [{ "username": "admin", "password": "admin" }],
-  "admins": ["admin"]
+  "users": [
+    {
+      "username": "admin",
+      "password": "admin"
+    },
+    {
+      "username": "user",
+      "password": "user"
+    }
+  ],
+  "admins": [
+    "admin"
+  ]
 }
