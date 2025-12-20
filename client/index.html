@@ -43,7 +43,11 @@
         <div class="app-overlay-header">
           <h3 id="app-workspace-title">Select an application</h3>
           <div class="workspace-actions">
-            <button type="button" id="app-refresh" class="ghost" disabled>Refresh Data</button>
+            <div id="app-progress" class="app-progress hidden">
+              <span class="progress-spinner"></span>
+              <span id="app-progress-text">Loading...</span>
+            </div>
+            <button type="button" id="app-refresh" class="ghost" disabled>Reset</button>
             <button type="button" id="app-exit" class="ghost" disabled>Close App</button>
           </div>
         </div>

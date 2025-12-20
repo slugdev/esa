@@ -9,6 +9,7 @@
   let editingApp = null;
   let activeApp = null;
   let activeComponents = [];
+  let appDirty = false;
   let workbookApp = null;
   let builderTarget = null;
   let builderWidgets = [];
@@ -109,6 +110,8 @@
   const appWorkspaceDesc = qs('#app-workspace-desc');
   const appRefreshBtn = qs('#app-refresh');
   const appExitBtn = qs('#app-exit');
+  const appProgress = qs('#app-progress');
+  const appProgressText = qs('#app-progress-text');
   const adminPanel = qs('#admin-panel');
   const adminWarning = qs('#admin-warning');
   const usersArea = qs('#users-area');
@@ -297,7 +300,7 @@
 
   appsListEl?.addEventListener('click', handleAppsListClick);
   appSearchInput?.addEventListener('input', handleAppSearch);
-  appRefreshBtn?.addEventListener('click', () => refreshActiveApp(true));
+  appRefreshBtn?.addEventListener('click', () => resetActiveApp());
   appExitBtn?.addEventListener('click', () => exitActiveApp());
 
   if (builderClose) builderClose.addEventListener('click', () => closeBuilderModal());
@@ -501,6 +504,7 @@
       const schema = await fetchAppSchema(owner, name);
       await ensureWorkbookLoaded(owner, name);
       activeApp = { owner, name, schema };
+      appDirty = false;
       renderAppUi(schema);
       await refreshActiveApp(true, false);
       updateWorkspaceState({ title: name, desc: 'Workbook synced. Edit inputs to push values back to Excel.', busy: false });
@@ -510,6 +514,16 @@
       showToast(err.message || 'Failed to launch application', true);
       resetWorkspace();
     }
+  }
+
+  async function resetActiveApp() {
+    if (!activeApp) return;
+    if (appDirty) {
+      const confirmed = confirm('You have unsaved changes. Are you sure you want to reset the app? This will reload all values from Excel.');
+      if (!confirmed) return;
+    }
+    const { owner, name } = activeApp;
+    await launchApp(owner, name);
   }
 
   async function ensureWorkbookLoaded(owner, name) {
@@ -545,28 +559,42 @@
     hideAppOverlay();
   }
 
+  function showAppProgress(message = 'Loading...') {
+    if (appProgress) appProgress.classList.remove('hidden');
+    if (appProgressText) appProgressText.textContent = message;
+  }
+
+  function hideAppProgress() {
+    if (appProgress) appProgress.classList.add('hidden');
+  }
+
   async function refreshActiveApp(showToastOnError = false, notifyOnSuccess = true) {
     if (!activeApp || !activeComponents.length) return;
+    showAppProgress('Refreshing data...');
     const failures = [];
-    await Promise.all(activeComponents.map(async (component) => {
-      if (!component?.sheet || !component?.cell) return;
-      try {
-        const value = await queryComponentValue(component);
-        updateComponentDisplay(component.id, value);
-      } catch (err) {
-        const reason = err?.message || 'Unable to read cell';
-        failures.push(`${component.label || component.cell || 'Field'}: ${reason}`);
-        console.warn('Failed to refresh component', component, err);
+    try {
+      await Promise.all(activeComponents.map(async (component) => {
+        if (!component?.sheet || !component?.cell) return;
+        try {
+          const value = await queryComponentValue(component);
+          updateComponentDisplay(component.id, value);
+        } catch (err) {
+          const reason = err?.message || 'Unable to read cell';
+          failures.push(`${component.label || component.cell || 'Field'}: ${reason}`);
+          console.warn('Failed to refresh component', component, err);
+        }
+      }));
+      if (showToastOnError) {
+        if (failures.length) {
+          const [first, ...rest] = failures;
+          const extra = rest.length ? ` (+${rest.length} more)` : '';
+          showToast(first + extra, true);
+        } else if (notifyOnSuccess) {
+          showToast('Values refreshed');
+        }
       }
-    }));
-    if (showToastOnError) {
-      if (failures.length) {
-        const [first, ...rest] = failures;
-        const extra = rest.length ? ` (+${rest.length} more)` : '';
-        showToast(first + extra, true);
-      } else if (notifyOnSuccess) {
-        showToast('Values refreshed');
-      }
+    } finally {
+      hideAppProgress();
     }
   }
 
@@ -794,7 +822,7 @@
         return `<div class="app-widget"${styleAttr}>${labelHtml}<input data-component="${id}" type="text" placeholder="${placeholder || 'Enter text...'}" /></div>`;
       
       case 'number':
-        return `<div class="app-widget"${styleAttr}>${labelHtml}<input data-component="${id}" type="number" placeholder="${placeholder}" min="${props.min || ''}" max="${props.max || ''}" /></div>`;
+        return `<div class="app-widget"${styleAttr}>${labelHtml}<input data-component="${id}" type="number" placeholder="${placeholder}" min="${props.min || ''}" max="${props.max || ''}" value="${escapeHtml(props.defaultValue || '')}" /></div>`;
       
       case 'textarea':
         return `<div class="app-widget"${styleAttr}>${labelHtml}<textarea data-component="${id}" rows="3" placeholder="${placeholder || 'Enter text...'}"></textarea></div>`;
@@ -825,6 +853,17 @@
         const spinMax = props.max ?? 100;
         const spinStep = props.step ?? 1;
         return `<div class="app-widget"${styleAttr}>${labelHtml}<input data-component="${id}" type="number" min="${spinMin}" max="${spinMax}" step="${spinStep}" value="${props.default || spinMin}" /></div>`;
+      
+      case 'currency': {
+        const currencySymbol = detectCurrencySymbol(props.format);
+        const currencyVal = props.defaultValue || '';
+        return `<div class="app-widget currency"${styleAttr}>${labelHtml}<span class="currency-symbol">${currencySymbol}</span><input data-component="${id}" type="number" step="0.01" placeholder="0.00" value="${escapeHtml(currencyVal)}" /></div>`;
+      }
+      
+      case 'percentage': {
+        const pctVal = props.defaultValue ? (parseFloat(props.defaultValue) * 100).toFixed(1) : '';
+        return `<div class="app-widget percentage"${styleAttr}>${labelHtml}<input data-component="${id}" type="number" step="0.1" placeholder="0" value="${pctVal}" /><span class="percent-symbol">%</span></div>`;
+      }
       
       case 'datepicker':
         return `<div class="app-widget"${styleAttr}>${labelHtml}<input data-component="${id}" type="date" /></div>`;
@@ -1004,6 +1043,7 @@
       payload.value = rawValue ?? '';
     }
     
+    showAppProgress('Updating Excel...');
     try {
       const res = await apiFetch(`${apiBase}/excel/set`, {
         method: 'POST',
@@ -1012,9 +1052,12 @@
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Failed to push value');
+      appDirty = true;
       await refreshActiveApp();
     } catch (err) {
       showToast(err.message || 'Failed to push value', true);
+    } finally {
+      hideAppProgress();
     }
   }
 
@@ -2131,21 +2174,21 @@
         };
       
       case 'currency':
-        // Currency - bidirectional input with money formatting
+        // Currency - push values to Excel (input mode)
         return { 
           ...common, 
           type: 'currency',
           properties: { label: '', defaultValue, format: format || '$#,##0.00' },
-          excel: { ...common.excel, mode: 'bidirectional' } 
+          excel: { ...common.excel, mode: 'input' } 
         };
       
       case 'percentage':
-        // Percentage - bidirectional with percent formatting
+        // Percentage - push values to Excel (input mode)
         return { 
           ...common, 
           type: 'percentage',
           properties: { label: '', defaultValue, format: format || '0%' },
-          excel: { ...common.excel, mode: 'bidirectional' } 
+          excel: { ...common.excel, mode: 'input' } 
         };
       
       case 'number':
@@ -2433,6 +2476,17 @@
   }
 
   const escapeHtml = (s) => (s || '').replace(/[&<>"]+/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  
+  // Detect currency symbol from Excel format string
+  const detectCurrencySymbol = (format) => {
+    if (!format) return '$';
+    if (format.includes('$')) return '$';
+    if (format.includes('£') || format.includes('\xa3')) return '£';
+    if (format.includes('€') || format.includes('\x80')) return '€';
+    if (format.includes('¥')) return '¥';
+    return '$'; // default to USD
+  };
+  
   const formatDescription = (desc) => {
     const normalized = (desc || '').trim();
     if (!normalized) return 'No description yet.';

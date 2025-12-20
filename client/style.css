@@ -216,6 +216,31 @@ input[type="file"] { padding: 8px; }
 }
 #app-ui-form { display: flex; flex-direction: column; gap: 8px; }
 
+/* App progress indicator */
+.app-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(90, 179, 255, 0.1);
+  border: 1px solid rgba(90, 179, 255, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--accent);
+}
+.app-progress.hidden { display: none; }
+.progress-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(90, 179, 255, 0.3);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* App runtime widget styles - matches preview */
 .app-widget {
   display: flex;
@@ -269,6 +294,16 @@ input[type="file"] { padding: 8px; }
   border-color: var(--accent);
 }
 
+/* Hide spinner buttons on all number inputs */
+.app-widget input[type="number"]::-webkit-outer-spin-button,
+.app-widget input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.app-widget input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 .app-widget input[type="range"] {
   padding: 0;
   height: 6px;
@@ -291,6 +326,28 @@ input[type="file"] { padding: 8px; }
 .app-widget .widget-output {
   font-size: 14px;
   color: var(--accent-strong);
+}
+
+.app-widget.currency,
+.app-widget.percentage {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-widget.currency .currency-symbol,
+.app-widget.percentage .percent-symbol {
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 16px;
+  min-width: 16px;
+}
+
+.app-widget.currency input,
+.app-widget.percentage input {
+  flex: 1;
+  text-align: right;
 }
 
 .app-widget .widget-formula {
@@ -1549,6 +1606,16 @@ input[type="file"] { padding: 8px; }
 .preview-widget textarea:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+/* Hide spinner buttons on all number inputs in preview */
+.preview-widget input[type="number"]::-webkit-outer-spin-button,
+.preview-widget input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.preview-widget input[type="number"] {
+  -moz-appearance: textfield;
 }
 
 .preview-widget input[type="range"] {
