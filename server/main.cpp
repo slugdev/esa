@@ -949,13 +949,61 @@ public:
                 dispatch_invoke(cell, L"Value", DISPATCH_PROPERTYGET, nullptr, 0, &val);
                 std::string value_json = variant_to_json(val);
                 
+                // Get number format to detect currency, percentage, date formats
+                std::string number_format;
+                VARIANT fmt_var;
+                VariantInit(&fmt_var);
+                if (dispatch_invoke(cell, L"NumberFormat", DISPATCH_PROPERTYGET, nullptr, 0, &fmt_var) && fmt_var.vt == VT_BSTR && fmt_var.bstrVal)
+                {
+                    std::wstring wfmt(fmt_var.bstrVal);
+                    number_format = std::string(wfmt.begin(), wfmt.end());
+                }
+                VariantClear(&fmt_var);
+                
+                // Pre-detect format-based types (currency, percentage) - these take priority for input cells
+                bool is_currency_fmt = number_format.find('$') != std::string::npos ||
+                                   number_format.find("Currency") != std::string::npos ||
+                                   number_format.find('\xa3') != std::string::npos || // £
+                                   number_format.find('\x80') != std::string::npos;   // €
+                bool is_percent_fmt = number_format.find('%') != std::string::npos;
+                bool is_date_fmt = number_format.find('d') != std::string::npos &&
+                                   number_format.find('m') != std::string::npos;
+                
                 // Determine value type
                 std::string cell_type = "text";
                 std::string value_str;
                 bool is_formula = false;
                 bool is_empty = (val.vt == VT_EMPTY || (val.vt == VT_BSTR && (!val.bstrVal || wcslen(val.bstrVal) == 0)));
                 
-                if (val.vt == VT_BOOL)
+                // Check if cell has a formula first
+                VARIANT formula_var;
+                VariantInit(&formula_var);
+                dispatch_invoke(cell, L"HasFormula", DISPATCH_PROPERTYGET, nullptr, 0, &formula_var);
+                if (formula_var.vt == VT_BOOL && formula_var.boolVal)
+                {
+                    is_formula = true;
+                }
+                VariantClear(&formula_var);
+                
+                // For cells with special formatting (currency, percentage, date), treat as input fields
+                // unless they contain a formula (then they're calculated outputs)
+                if (is_currency_fmt && !is_formula)
+                {
+                    cell_type = "currency";
+                }
+                else if (is_percent_fmt && !is_formula)
+                {
+                    cell_type = "percentage";
+                }
+                else if (is_date_fmt && !is_formula && (val.vt == VT_DATE || is_empty))
+                {
+                    cell_type = "date";
+                }
+                else if (is_formula)
+                {
+                    cell_type = "formula";
+                }
+                else if (val.vt == VT_BOOL)
                 {
                     cell_type = "checkbox";
                 }
@@ -974,17 +1022,6 @@ public:
                     cell_type = "text";
                 }
                 VariantClear(&val);
-
-                // Check if cell has a formula
-                VARIANT formula_var;
-                VariantInit(&formula_var);
-                dispatch_invoke(cell, L"HasFormula", DISPATCH_PROPERTYGET, nullptr, 0, &formula_var);
-                if (formula_var.vt == VT_BOOL && formula_var.boolVal)
-                {
-                    is_formula = true;
-                    cell_type = "formula";
-                }
-                VariantClear(&formula_var);
 
                 // Check for data validation (dropdowns)
                 std::string dropdown_options;
@@ -1030,6 +1067,10 @@ public:
                 if (!dropdown_options.empty())
                 {
                     json << ",\"options\":\"" << json_escape(dropdown_options) << "\"";
+                }
+                if (!number_format.empty())
+                {
+                    json << ",\"format\":\"" << json_escape(number_format) << "\"";
                 }
                 json << "}";
             }

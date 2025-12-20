@@ -30,6 +30,8 @@
     // Inputs
     textinput: { category: 'input', icon: '📝', label: 'Text Input' },
     number: { category: 'input', icon: '🔢', label: 'Number' },
+    currency: { category: 'input', icon: '💰', label: 'Currency' },
+    percentage: { category: 'input', icon: '📊', label: 'Percentage' },
     textarea: { category: 'input', icon: '📄', label: 'Text Area' },
     dropdown: { category: 'input', icon: '📋', label: 'Dropdown' },
     checkbox: { category: 'input', icon: '☑️', label: 'Checkbox' },
@@ -2090,7 +2092,7 @@
   }
 
   function cellToWidget(cell, sheet) {
-    const { address, type, value, options } = cell;
+    const { address, type, value, options, format } = cell;
     const baseName = `cell_${address.replace(/[^A-Za-z0-9]/g, '')}`;
     
     // Empty cells become spacers
@@ -2098,11 +2100,14 @@
       return createSpacer();
     }
     
+    // Normalize value to string for defaults
+    const defaultValue = value != null ? String(value) : '';
+    
     const common = {
       id: createWidgetId(),
       name: baseName,
-      properties: {},
-      excel: { enabled: true, sheet, cell: address, mode: 'read' }
+      properties: { defaultValue },
+      excel: { enabled: true, sheet, cell: address, mode: 'output' }
     };
     
     switch (type) {
@@ -2111,8 +2116,8 @@
         return { 
           ...common, 
           type: 'checkbox',
-          properties: { label: String(value ?? '') },
-          excel: { ...common.excel, mode: 'write' } 
+          properties: { label: '', defaultValue: value === true || value === 'TRUE' },
+          excel: { ...common.excel, mode: 'bidirectional' } 
         };
       
       case 'dropdown':
@@ -2121,8 +2126,26 @@
         return {
           ...common,
           type: 'dropdown',
-          properties: { label: '', options: optList.join('\n') },
-          excel: { ...common.excel, mode: 'write' }
+          properties: { label: '', options: optList.join('\n'), defaultValue },
+          excel: { ...common.excel, mode: 'bidirectional' }
+        };
+      
+      case 'currency':
+        // Currency - bidirectional input with money formatting
+        return { 
+          ...common, 
+          type: 'currency',
+          properties: { label: '', defaultValue, format: format || '$#,##0.00' },
+          excel: { ...common.excel, mode: 'bidirectional' } 
+        };
+      
+      case 'percentage':
+        // Percentage - bidirectional with percent formatting
+        return { 
+          ...common, 
+          type: 'percentage',
+          properties: { label: '', defaultValue, format: format || '0%' },
+          excel: { ...common.excel, mode: 'bidirectional' } 
         };
       
       case 'number':
@@ -2130,8 +2153,8 @@
         return { 
           ...common, 
           type: 'number',
-          properties: { label: '' },
-          excel: { ...common.excel, mode: 'write' } 
+          properties: { label: '', defaultValue },
+          excel: { ...common.excel, mode: 'bidirectional' } 
         };
       
       case 'date':
@@ -2139,8 +2162,8 @@
         return { 
           ...common, 
           type: 'datepicker',
-          properties: { label: '' },
-          excel: { ...common.excel, mode: 'write' } 
+          properties: { label: '', defaultValue },
+          excel: { ...common.excel, mode: 'bidirectional' } 
         };
       
       case 'formula':
@@ -2148,8 +2171,8 @@
         return { 
           ...common, 
           type: 'output',
-          properties: { label: '' },
-          excel: { ...common.excel, mode: 'read' }
+          properties: { label: '', defaultValue },
+          excel: { ...common.excel, mode: 'output' }
         };
       
       case 'text':
@@ -2159,8 +2182,8 @@
           ...common, 
           type: 'label',
           name: baseName,
-          properties: { label: String(value ?? '') },
-          excel: { ...common.excel, mode: 'read' }
+          properties: { label: defaultValue, defaultValue },
+          excel: { ...common.excel, mode: 'output' }
         };
     }
   }
