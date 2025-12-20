@@ -135,7 +135,8 @@
   // Property form elements
   const propWidgetId = qs('#prop-widget-id');
   const propName = qs('#prop-name');
-  const propType = qs('#prop-type');
+  const propType = qs('#prop-type'); // legacy, may be null
+  const propWidgetLegend = qs('#prop-widget-legend');
   const propLabel = qs('#prop-label');
   const propPlaceholder = qs('#prop-placeholder');
   const propTooltip = qs('#prop-tooltip');
@@ -1744,7 +1745,8 @@
     // Fill common fields
     if (propWidgetId) propWidgetId.value = widget.id;
     if (propName) propName.value = widget.name || '';
-    if (propType) propType.value = def.label || widget.type;
+    const typeLabel = def.label || widget.type;
+    if (propWidgetLegend) propWidgetLegend.textContent = `Widget - ${typeLabel}`;
     if (propLabel) propLabel.value = props.label || '';
     if (propPlaceholder) propPlaceholder.value = props.placeholder || '';
     if (propTooltip) propTooltip.value = props.tooltip || '';
