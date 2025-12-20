@@ -1011,10 +1011,10 @@ public:
                     VariantClear(&type_var);
                 }
 
-                // Skip empty cells unless they have validation
+                // Include empty cells as "empty" type for grid layout (spacers)
                 if (is_empty && cell_type != "dropdown")
                 {
-                    continue;
+                    cell_type = "empty";
                 }
 
                 if (!first) json << ",";

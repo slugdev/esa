@@ -2025,76 +2025,154 @@
         return showToast('No cells found in range', true);
       }
       
-      // Convert analyzed cells to widgets
-      const widgets = convertCellsToWidgets(data.cells, sheet);
-      if (!widgets.length) {
-        return showToast('No widgets generated', true);
-      }
+      // Create a grid sizer with widgets matching the Excel layout
+      const gridWidget = createGridFromCells(data.cells, data.rowCount, data.colCount, sheet);
       
-      // Add widgets to the builder
-      addImportedWidgets(widgets);
-      showToast(`Imported ${widgets.length} widget${widgets.length > 1 ? 's' : ''} from Excel`);
+      // Add the grid to the builder
+      addImportedWidgets([gridWidget]);
+      const widgetCount = data.cells.filter(c => c.type !== 'empty').length;
+      showToast(`Imported ${data.rowCount}×${data.colCount} grid with ${widgetCount} widget${widgetCount !== 1 ? 's' : ''}`);
       
     } catch (err) {
       showToast(err.message || 'Failed to import from Excel', true);
     }
   }
 
-  function convertCellsToWidgets(cells, sheet) {
-    const widgets = [];
+  function createGridFromCells(cells, rowCount, colCount, sheet) {
+    // Create a grid sizer to match Excel layout
+    const grid = {
+      id: createWidgetId(),
+      type: 'gridsizer',
+      name: 'ExcelGrid',
+      properties: {
+        rows: rowCount,
+        cols: colCount,
+        hgap: '8',
+        vgap: '8'
+      },
+      children: []
+    };
+    
+    // Create a 2D map of cells by position (0-indexed relative to range)
+    const cellMap = new Map();
+    let minRow = Infinity, minCol = Infinity;
     for (const cell of cells) {
-      const widget = cellToWidget(cell, sheet);
-      if (widget) widgets.push(widget);
+      minRow = Math.min(minRow, cell.row);
+      minCol = Math.min(minCol, cell.col);
     }
-    return widgets;
+    for (const cell of cells) {
+      const relRow = cell.row - minRow;
+      const relCol = cell.col - minCol;
+      cellMap.set(`${relRow},${relCol}`, cell);
+    }
+    
+    // Fill grid in row-major order
+    for (let r = 0; r < rowCount; r++) {
+      for (let c = 0; c < colCount; c++) {
+        const cell = cellMap.get(`${r},${c}`);
+        const widget = cell ? cellToWidget(cell, sheet) : createSpacer();
+        grid.children.push(widget);
+      }
+    }
+    
+    return grid;
+  }
+
+  function createSpacer() {
+    return {
+      id: createWidgetId(),
+      type: 'spacer',
+      name: 'spacer',
+      properties: {}
+    };
   }
 
   function cellToWidget(cell, sheet) {
     const { address, type, value, options } = cell;
     const baseName = `cell_${address.replace(/[^A-Za-z0-9]/g, '')}`;
+    
+    // Empty cells become spacers
+    if (type === 'empty') {
+      return createSpacer();
+    }
+    
     const common = {
       id: createWidgetId(),
       name: baseName,
-      properties: { label: String(value ?? '') },
+      properties: {},
       excel: { enabled: true, sheet, cell: address, mode: 'read' }
     };
     
     switch (type) {
       case 'checkbox':
-        return { ...common, type: 'checkbox', excel: { ...common.excel, mode: 'write' } };
+        // Checkbox - bidirectional
+        return { 
+          ...common, 
+          type: 'checkbox',
+          properties: { label: String(value ?? '') },
+          excel: { ...common.excel, mode: 'write' } 
+        };
       
       case 'dropdown':
+        // Dropdown - bidirectional
         const optList = options?.split(',').map(o => o.trim()).filter(Boolean) || [];
         return {
           ...common,
           type: 'dropdown',
-          properties: { ...common.properties, options: optList.join('\n') },
+          properties: { label: '', options: optList.join('\n') },
           excel: { ...common.excel, mode: 'write' }
         };
       
       case 'number':
-        return { ...common, type: 'number', excel: { ...common.excel, mode: 'write' } };
+        // Number without formula - bidirectional input (feeds equations)
+        return { 
+          ...common, 
+          type: 'number',
+          properties: { label: '' },
+          excel: { ...common.excel, mode: 'write' } 
+        };
       
       case 'date':
-        return { ...common, type: 'datepicker', excel: { ...common.excel, mode: 'write' } };
+        // Date - bidirectional
+        return { 
+          ...common, 
+          type: 'datepicker',
+          properties: { label: '' },
+          excel: { ...common.excel, mode: 'write' } 
+        };
       
       case 'formula':
-        return { ...common, type: 'output', properties: { label: String(value ?? 'Result') } };
+        // Formula result - read-only output from Excel
+        return { 
+          ...common, 
+          type: 'output',
+          properties: { label: '' },
+          excel: { ...common.excel, mode: 'read' }
+        };
       
       case 'text':
       default:
-        // If value looks static (no user input expected), use a label; otherwise textinput
-        return { ...common, type: 'textinput', excel: { ...common.excel, mode: 'write' } };
+        // Plain text - label bound to Excel for live updates
+        return { 
+          ...common, 
+          type: 'label',
+          name: baseName,
+          properties: { label: String(value ?? '') },
+          excel: { ...common.excel, mode: 'read' }
+        };
     }
   }
 
   function addImportedWidgets(widgets) {
     // If a container widget is selected, add inside it
     let parent = null;
-    if (builderSelectedWidget) {
-      const def = WIDGET_TYPES[builderSelectedWidget.type];
-      if (def?.isContainer) {
-        parent = builderSelectedWidget;
+    if (builderSelectedWidget && builderSelectedWidget !== 'app-root') {
+      const selectedWidgetObj = findWidgetById(builderWidgets, builderSelectedWidget);
+      if (selectedWidgetObj) {
+        const def = WIDGET_TYPES[selectedWidgetObj.type];
+        if (def?.isContainer) {
+          parent = selectedWidgetObj;
+        }
       }
     }
     
