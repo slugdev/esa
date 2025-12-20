@@ -651,6 +651,14 @@
       // For dropdowns, convert value to string for matching
       const strVal = value != null ? String(value) : '';
       el.value = strVal;
+    } else if (el.type === 'date') {
+      // Date inputs expect YYYY-MM-DD format
+      if (value && typeof value === 'string') {
+        // Remove quotes if present (from JSON)
+        el.value = value.replace(/^"|"$/g, '');
+      } else {
+        el.value = value ?? '';
+      }
     } else {
       el.value = value ?? '';
     }
@@ -1070,6 +1078,10 @@
       const num = Number(trimmed);
       if (!Number.isFinite(num)) return showToast('Enter a valid percentage', true);
       payload.value_number = num / 100;
+    } else if (type === 'datepicker') {
+      // Send date as string for Excel to parse
+      if (!rawValue) return showToast('Select a date', true);
+      payload.value = rawValue;
     } else if (type === 'checkbox') {
       payload.value = rawValue;
     } else {
