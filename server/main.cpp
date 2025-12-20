@@ -1820,10 +1820,44 @@ std::string variant_to_json(const VARIANT &v)
         return "null";
     if (val.vt == VT_BOOL)
         return val.boolVal == VARIANT_TRUE ? "true" : "false";
+    if (val.vt == VT_I1)
+        return std::to_string(static_cast<int>(val.cVal));
+    if (val.vt == VT_UI1)
+        return std::to_string(static_cast<unsigned int>(val.bVal));
+    if (val.vt == VT_I2)
+        return std::to_string(val.iVal);
+    if (val.vt == VT_UI2)
+        return std::to_string(val.uiVal);
     if (val.vt == VT_I4 || val.vt == VT_INT)
         return std::to_string(val.intVal);
+    if (val.vt == VT_UI4 || val.vt == VT_UINT)
+        return std::to_string(val.uintVal);
+    if (val.vt == VT_I8)
+        return std::to_string(val.llVal);
+    if (val.vt == VT_UI8)
+        return std::to_string(val.ullVal);
+    if (val.vt == VT_R4)
+        return std::to_string(val.fltVal);
     if (val.vt == VT_R8)
         return std::to_string(val.dblVal);
+    if (val.vt == VT_CY)
+    {
+        // Currency is stored as 64-bit integer scaled by 10000
+        double cyVal = static_cast<double>(val.cyVal.int64) / 10000.0;
+        return std::to_string(cyVal);
+    }
+    if (val.vt == VT_DATE)
+    {
+        // OLE Automation date - convert to ISO string
+        SYSTEMTIME st;
+        if (VariantTimeToSystemTime(val.date, &st))
+        {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "\"%04d-%02d-%02d\"", st.wYear, st.wMonth, st.wDay);
+            return std::string(buf);
+        }
+        return std::to_string(val.date); // fallback to raw number
+    }
     if (val.vt == VT_BSTR)
     {
         std::wstring ws(val.bstrVal ? val.bstrVal : L"");

@@ -519,11 +519,18 @@
   async function resetActiveApp() {
     if (!activeApp) return;
     if (appDirty) {
-      const confirmed = confirm('You have unsaved changes. Are you sure you want to reset the app? This will reload all values from Excel.');
+      const confirmed = confirm('You have unsaved changes. Are you sure you want to reset the app? This will reload all values from the Excel file.');
       if (!confirmed) return;
     }
     const { owner, name } = activeApp;
-    await launchApp(owner, name);
+    showAppProgress('Resetting app...');
+    try {
+      // Force close workbook so ensureWorkbookLoaded will reload it fresh
+      await closeWorkbook();
+      await launchApp(owner, name);
+    } finally {
+      hideAppProgress();
+    }
   }
 
   async function ensureWorkbookLoaded(owner, name) {
@@ -570,13 +577,16 @@
 
   async function refreshActiveApp(showToastOnError = false, notifyOnSuccess = true) {
     if (!activeApp || !activeComponents.length) return;
+    console.log('refreshActiveApp: activeComponents=', activeComponents);
     showAppProgress('Refreshing data...');
     const failures = [];
     try {
       await Promise.all(activeComponents.map(async (component) => {
         if (!component?.sheet || !component?.cell) return;
         try {
+          console.log('Querying component:', component.id, component.componentType, component.sheet, component.cell);
           const value = await queryComponentValue(component);
+          console.log('Got value for', component.id, ':', value);
           updateComponentDisplay(component.id, value);
         } catch (err) {
           const reason = err?.message || 'Unable to read cell';
@@ -618,9 +628,14 @@
 
   function updateComponentDisplay(id, value) {
     const el = appUiForm?.querySelector(`[data-component="${id}"]`);
+    console.log('updateComponentDisplay', id, value, 'found:', !!el, 'tagName:', el?.tagName, 'type:', el?.type);
     if (!el) return;
     
-    if (el.tagName === 'OUTPUT') {
+    // Find component type from activeComponents
+    const component = activeComponents.find(c => c.id === id);
+    const componentType = component?.componentType;
+    
+    if (el.tagName === 'OUTPUT' || el.tagName === 'SPAN') {
       el.textContent = formatValue(value);
     } else if (el.type === 'checkbox') {
       el.checked = value === 'TRUE' || value === true || value === 1;
@@ -628,6 +643,10 @@
       el.value = value ?? '';
       const valueSpan = appUiForm?.querySelector(`[data-value-for="${id}"]`);
       if (valueSpan) valueSpan.textContent = value ?? '—';
+    } else if (componentType === 'percentage') {
+      // Excel stores percentages as decimals (0.5 = 50%), convert for display
+      const pctValue = value != null && !isNaN(value) ? (parseFloat(value) * 100).toFixed(1) : '';
+      el.value = pctValue;
     } else {
       el.value = value ?? '';
     }
@@ -725,6 +744,7 @@
     let result = [];
     for (const w of widgets) {
       if (w.excel?.enabled && w.excel.sheet && w.excel.cell) {
+        console.log('collectExcelWidgets: adding', w.type, w.id, w.excel);
         result.push({
           id: w.id,
           sheet: w.excel.sheet,
@@ -813,7 +833,8 @@
     
     switch (widget.type) {
       case 'label':
-        return `<div class="app-widget"${styleAttr}><span class="widget-label">${label}</span></div>`;
+        // Use span with data-component if Excel-connected, so it can be updated
+        return `<div class="app-widget"${styleAttr}><span class="widget-label" data-component="${id}">${label}</span></div>`;
       
       case 'output':
         return `<div class="app-widget"${styleAttr}>${labelHtml}<output data-component="${id}" class="widget-output">—</output></div>`;
@@ -1031,12 +1052,19 @@
     const payload = { sheet: component.sheet, range: component.cell };
     const type = component.componentType || 'text';
     
-    if (type === 'number' || type === 'slider') {
+    if (type === 'number' || type === 'slider' || type === 'currency') {
       const trimmed = (rawValue ?? '').trim();
       if (trimmed === '') return showToast('Enter a number', true);
       const num = Number(trimmed);
       if (!Number.isFinite(num)) return showToast('Enter a valid number', true);
       payload.value_number = num;
+    } else if (type === 'percentage') {
+      // Convert display percentage (50) to Excel decimal (0.5)
+      const trimmed = (rawValue ?? '').trim();
+      if (trimmed === '') return showToast('Enter a percentage', true);
+      const num = Number(trimmed);
+      if (!Number.isFinite(num)) return showToast('Enter a valid percentage', true);
+      payload.value_number = num / 100;
     } else if (type === 'checkbox') {
       payload.value = rawValue;
     } else {
