@@ -857,7 +857,7 @@
         const optsHtml = options.length 
           ? options.map(opt => `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`).join('')
           : '';
-        return `<div class="app-widget"${styleAttr}>${labelHtml}<select data-component="${id}"><option value="">Select...</option>${optsHtml}</select></div>`;
+        return `<div class="app-widget"${styleAttr}>${labelHtml}<select data-component="${id}">${optsHtml}</select></div>`;
       
       case 'checkbox':
         return `<div class="app-widget checkbox"${styleAttr}><label><input type="checkbox" data-component="${id}" /> ${label}</label></div>`;
