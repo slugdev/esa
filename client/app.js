@@ -647,6 +647,10 @@
       // Excel stores percentages as decimals (0.5 = 50%), convert for display
       const pctValue = value != null && !isNaN(value) ? (parseFloat(value) * 100).toFixed(1) : '';
       el.value = pctValue;
+    } else if (el.tagName === 'SELECT') {
+      // For dropdowns, convert value to string for matching
+      const strVal = value != null ? String(value) : '';
+      el.value = strVal;
     } else {
       el.value = value ?? '';
     }
@@ -827,7 +831,8 @@
     const id = widget.id;
     const hasExcel = excel.enabled && excel.sheet && excel.cell;
     const placeholder = escapeHtml(props.placeholder || '');
-    const options = (props.options || '').split(',').map(o => o.trim()).filter(Boolean);
+    // Options can be comma or newline separated
+    const options = (props.options || '').split(/[,\n]/).map(o => o.trim()).filter(Boolean);
     // Only show label if explicitly set in properties
     const labelHtml = props.label ? `<label class="widget-field-label">${escapeHtml(props.label)}</label>` : '';
     
