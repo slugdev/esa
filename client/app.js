@@ -114,6 +114,9 @@
   const builderClose = qs('#ui-builder-close');
   const builderAppLabel = qs('#builder-app-label');
   const builderSaveLayoutBtn = qs('#builder-save-layout');
+  const builderImportSheet = qs('#builder-import-sheet');
+  const builderImportRange = qs('#builder-import-range');
+  const builderImportExcel = qs('#builder-import-excel');
   const builderWidgetTree = qs('#builder-widget-tree');
   const builderTreeRoot = qs('#builder-tree-root');
   const builderEmpty = qs('#builder-empty');
@@ -318,6 +321,7 @@
   propDeleteWidget?.addEventListener('click', handleDeleteWidget);
   propDeleteApp?.addEventListener('click', handleDeleteApp);
   builderSaveLayoutBtn?.addEventListener('click', () => saveBuilderLayout());
+  builderImportExcel?.addEventListener('click', handleExcelImport);
   
   // Sash resize functionality
   if (builderSash && builderTreePanel && builderPropertiesPanel) {
@@ -1936,6 +1940,19 @@
   function setSheetOptions(sheets, preferred) {
     builderSheets = Array.isArray(sheets) ? sheets.filter(Boolean) : [];
     renderSheetOptions(preferred);
+    renderImportSheetOptions();
+  }
+
+  function renderImportSheetOptions() {
+    if (!builderImportSheet) return;
+    if (!builderSheets.length) {
+      builderImportSheet.innerHTML = '<option value="">No sheets</option>';
+      builderImportSheet.disabled = true;
+      return;
+    }
+    builderImportSheet.disabled = false;
+    builderImportSheet.innerHTML = '<option value="">Sheet...</option>' +
+      builderSheets.map(sheet => `<option value="${escapeHtml(sheet)}">${escapeHtml(sheet)}</option>`).join('');
   }
 
   function ensureSheetOption(sheet) {
@@ -1981,6 +1998,117 @@
     } catch (err) {
       showToast(err.message || 'Failed to save layout', true);
     }
+  }
+
+  async function handleExcelImport() {
+    if (!builderTarget) return showToast('No app selected', true);
+    const sheet = builderImportSheet?.value;
+    const range = builderImportRange?.value?.trim();
+    if (!sheet) return showToast('Select a sheet first', true);
+    if (!range) return showToast('Enter a cell range (e.g., A1:C5)', true);
+    
+    try {
+      const res = await apiFetch(`${apiBase}/excel/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({
+          owner: builderTarget.owner,
+          name: builderTarget.name,
+          sheet,
+          range
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Failed to analyze Excel range');
+      
+      if (!data.cells?.length) {
+        return showToast('No cells found in range', true);
+      }
+      
+      // Convert analyzed cells to widgets
+      const widgets = convertCellsToWidgets(data.cells, sheet);
+      if (!widgets.length) {
+        return showToast('No widgets generated', true);
+      }
+      
+      // Add widgets to the builder
+      addImportedWidgets(widgets);
+      showToast(`Imported ${widgets.length} widget${widgets.length > 1 ? 's' : ''} from Excel`);
+      
+    } catch (err) {
+      showToast(err.message || 'Failed to import from Excel', true);
+    }
+  }
+
+  function convertCellsToWidgets(cells, sheet) {
+    const widgets = [];
+    for (const cell of cells) {
+      const widget = cellToWidget(cell, sheet);
+      if (widget) widgets.push(widget);
+    }
+    return widgets;
+  }
+
+  function cellToWidget(cell, sheet) {
+    const { address, type, value, options } = cell;
+    const baseName = `cell_${address.replace(/[^A-Za-z0-9]/g, '')}`;
+    const common = {
+      id: createWidgetId(),
+      name: baseName,
+      properties: { label: String(value ?? '') },
+      excel: { enabled: true, sheet, cell: address, mode: 'read' }
+    };
+    
+    switch (type) {
+      case 'checkbox':
+        return { ...common, type: 'checkbox', excel: { ...common.excel, mode: 'write' } };
+      
+      case 'dropdown':
+        const optList = options?.split(',').map(o => o.trim()).filter(Boolean) || [];
+        return {
+          ...common,
+          type: 'dropdown',
+          properties: { ...common.properties, options: optList.join('\n') },
+          excel: { ...common.excel, mode: 'write' }
+        };
+      
+      case 'number':
+        return { ...common, type: 'number', excel: { ...common.excel, mode: 'write' } };
+      
+      case 'date':
+        return { ...common, type: 'datepicker', excel: { ...common.excel, mode: 'write' } };
+      
+      case 'formula':
+        return { ...common, type: 'output', properties: { label: String(value ?? 'Result') } };
+      
+      case 'text':
+      default:
+        // If value looks static (no user input expected), use a label; otherwise textinput
+        return { ...common, type: 'textinput', excel: { ...common.excel, mode: 'write' } };
+    }
+  }
+
+  function addImportedWidgets(widgets) {
+    // If a container widget is selected, add inside it
+    let parent = null;
+    if (builderSelectedWidget) {
+      const def = WIDGET_TYPES[builderSelectedWidget.type];
+      if (def?.isContainer) {
+        parent = builderSelectedWidget;
+      }
+    }
+    
+    if (parent) {
+      // Add inside selected container
+      if (!parent.children) parent.children = [];
+      widgets.forEach(w => parent.children.push(w));
+    } else {
+      // Add to root
+      widgets.forEach(w => builderWidgets.push(w));
+    }
+    
+    renderWidgetTree();
+    renderBuilderPreview();
   }
 
   function hasUnsavedBuilderChanges() {

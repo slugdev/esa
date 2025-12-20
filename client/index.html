@@ -143,6 +143,13 @@
           <span id="builder-app-label" class="pill" style="margin-left: 12px;">No app</span>
         </div>
         <div class="builder-header-actions">
+          <div class="excel-import-group">
+            <select id="builder-import-sheet" title="Select sheet">
+              <option value="">Sheet...</option>
+            </select>
+            <input type="text" id="builder-import-range" placeholder="A1:C5" title="Excel range to import">
+            <button type="button" id="builder-import-excel" class="btn-small" title="Analyze range and generate widgets">Import</button>
+          </div>
           <button type="button" id="builder-save-layout" class="btn-small">Save Layout</button>
           <button type="button" id="ui-builder-close" class="ghost">Close</button>
         </div>

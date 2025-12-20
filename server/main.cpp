@@ -703,6 +703,9 @@ bool dispatch_put_variant(IDispatch *disp, const wchar_t *name, VARIANT *val)
     return dispatch_invoke(disp, name, DISPATCH_PROPERTYPUT, val, 1, nullptr);
 }
 
+// Forward declaration for use in ExcelPool methods
+std::string json_escape(const std::string &s);
+
 class ExcelPool
 {
 public:
@@ -856,6 +859,184 @@ public:
             err = "failed to set value";
             return false;
         }
+        return true;
+    }
+
+    // Analyze a range of cells to detect types and layout for auto-generating UI
+    bool analyze_range(const std::string &session_id, const std::string &sheet, const std::string &range, std::string &json_out, std::string &err)
+    {
+        CComPtr<IDispatch> range_obj;
+        if (!get_range(session_id, sheet, range, range_obj, err))
+            return false;
+
+        // Get range dimensions
+        CComPtr<IDispatch> rows = dispatch_get(range_obj, L"Rows");
+        CComPtr<IDispatch> cols = dispatch_get(range_obj, L"Columns");
+        if (!rows || !cols)
+        {
+            err = "failed to get range dimensions";
+            return false;
+        }
+
+        VARIANT row_count_var, col_count_var;
+        VariantInit(&row_count_var);
+        VariantInit(&col_count_var);
+        dispatch_invoke(rows, L"Count", DISPATCH_PROPERTYGET, nullptr, 0, &row_count_var);
+        dispatch_invoke(cols, L"Count", DISPATCH_PROPERTYGET, nullptr, 0, &col_count_var);
+        
+        long row_count = (row_count_var.vt == VT_I4) ? row_count_var.lVal : 1;
+        long col_count = (col_count_var.vt == VT_I4) ? col_count_var.lVal : 1;
+        VariantClear(&row_count_var);
+        VariantClear(&col_count_var);
+
+        // Get the starting row and column
+        CComPtr<IDispatch> first_cell = dispatch_get(range_obj, L"Cells");
+        VARIANT row_var, col_var;
+        VariantInit(&row_var);
+        VariantInit(&col_var);
+        dispatch_invoke(range_obj, L"Row", DISPATCH_PROPERTYGET, nullptr, 0, &row_var);
+        dispatch_invoke(range_obj, L"Column", DISPATCH_PROPERTYGET, nullptr, 0, &col_var);
+        long start_row = (row_var.vt == VT_I4) ? row_var.lVal : 1;
+        long start_col = (col_var.vt == VT_I4) ? col_var.lVal : 1;
+        VariantClear(&row_var);
+        VariantClear(&col_var);
+
+        std::ostringstream json;
+        json << "{\"cells\":[";
+        bool first = true;
+
+        // Iterate through each cell in the range
+        for (long r = 1; r <= row_count; ++r)
+        {
+            for (long c = 1; c <= col_count; ++c)
+            {
+                // Get cell at (r, c) within the range
+                VARIANT args[2];
+                VariantInit(&args[0]);
+                VariantInit(&args[1]);
+                args[1].vt = VT_I4;
+                args[1].lVal = r;
+                args[0].vt = VT_I4;
+                args[0].lVal = c;
+                
+                VARIANT cell_var;
+                VariantInit(&cell_var);
+                if (!dispatch_invoke(range_obj, L"Cells", DISPATCH_PROPERTYGET, args, 2, &cell_var) || cell_var.vt != VT_DISPATCH)
+                {
+                    VariantClear(&cell_var);
+                    continue;
+                }
+                CComPtr<IDispatch> cell = cell_var.pdispVal;
+                VariantClear(&cell_var);
+
+                // Get cell address
+                VARIANT addr_var;
+                VariantInit(&addr_var);
+                dispatch_invoke(cell, L"Address", DISPATCH_PROPERTYGET, nullptr, 0, &addr_var);
+                std::string address;
+                if (addr_var.vt == VT_BSTR && addr_var.bstrVal)
+                {
+                    std::wstring waddr(addr_var.bstrVal);
+                    address = std::string(waddr.begin(), waddr.end());
+                    // Remove $ signs for cleaner address
+                    address.erase(std::remove(address.begin(), address.end(), '$'), address.end());
+                }
+                VariantClear(&addr_var);
+
+                // Get cell value
+                VARIANT val;
+                VariantInit(&val);
+                dispatch_invoke(cell, L"Value", DISPATCH_PROPERTYGET, nullptr, 0, &val);
+                std::string value_json = variant_to_json(val);
+                
+                // Determine value type
+                std::string cell_type = "text";
+                std::string value_str;
+                bool is_formula = false;
+                bool is_empty = (val.vt == VT_EMPTY || (val.vt == VT_BSTR && (!val.bstrVal || wcslen(val.bstrVal) == 0)));
+                
+                if (val.vt == VT_BOOL)
+                {
+                    cell_type = "checkbox";
+                }
+                else if (val.vt == VT_R8 || val.vt == VT_I4 || val.vt == VT_I2)
+                {
+                    cell_type = "number";
+                }
+                else if (val.vt == VT_DATE)
+                {
+                    cell_type = "date";
+                }
+                else if (val.vt == VT_BSTR && val.bstrVal)
+                {
+                    std::wstring ws(val.bstrVal);
+                    value_str = std::string(ws.begin(), ws.end());
+                    cell_type = "text";
+                }
+                VariantClear(&val);
+
+                // Check if cell has a formula
+                VARIANT formula_var;
+                VariantInit(&formula_var);
+                dispatch_invoke(cell, L"HasFormula", DISPATCH_PROPERTYGET, nullptr, 0, &formula_var);
+                if (formula_var.vt == VT_BOOL && formula_var.boolVal)
+                {
+                    is_formula = true;
+                    cell_type = "formula";
+                }
+                VariantClear(&formula_var);
+
+                // Check for data validation (dropdowns)
+                std::string dropdown_options;
+                CComPtr<IDispatch> validation = dispatch_get(cell, L"Validation");
+                if (validation)
+                {
+                    VARIANT type_var;
+                    VariantInit(&type_var);
+                    dispatch_invoke(validation, L"Type", DISPATCH_PROPERTYGET, nullptr, 0, &type_var);
+                    // Type 3 = xlValidateList (dropdown)
+                    if (type_var.vt == VT_I4 && type_var.lVal == 3)
+                    {
+                        cell_type = "dropdown";
+                        VARIANT formula1_var;
+                        VariantInit(&formula1_var);
+                        dispatch_invoke(validation, L"Formula1", DISPATCH_PROPERTYGET, nullptr, 0, &formula1_var);
+                        if (formula1_var.vt == VT_BSTR && formula1_var.bstrVal)
+                        {
+                            std::wstring wf(formula1_var.bstrVal);
+                            dropdown_options = std::string(wf.begin(), wf.end());
+                        }
+                        VariantClear(&formula1_var);
+                    }
+                    VariantClear(&type_var);
+                }
+
+                // Skip empty cells unless they have validation
+                if (is_empty && cell_type != "dropdown")
+                {
+                    continue;
+                }
+
+                if (!first) json << ",";
+                first = false;
+
+                json << "{";
+                json << "\"address\":\"" << json_escape(address) << "\",";
+                json << "\"row\":" << (start_row + r - 1) << ",";
+                json << "\"col\":" << (start_col + c - 1) << ",";
+                json << "\"type\":\"" << cell_type << "\",";
+                json << "\"value\":" << value_json << ",";
+                json << "\"isFormula\":" << (is_formula ? "true" : "false");
+                if (!dropdown_options.empty())
+                {
+                    json << ",\"options\":\"" << json_escape(dropdown_options) << "\"";
+                }
+                json << "}";
+            }
+        }
+
+        json << "],\"rowCount\":" << row_count << ",\"colCount\":" << col_count << "}";
+        json_out = json.str();
         return true;
     }
 
@@ -1796,6 +1977,8 @@ private:
             return handle_excel_close(req);
         if (req.method == "POST" && req.path == "/excel/sheets")
             return handle_excel_sheets(req);
+        if (req.method == "POST" && req.path == "/excel/analyze")
+            return handle_excel_analyze(req);
         if (req.method == "POST" && req.path == "/apps/ui/get")
             return handle_ui_get(req);
         if (req.method == "POST" && req.path == "/apps/ui/save")
@@ -2193,6 +2376,84 @@ private:
         oss << "]}";
         resp.body = oss.str();
         log_info("Listed " + std::to_string(sheets.size()) + " sheet(s) for owner=" + owner + " app=" + app_name + " version=" + std::to_string(ver));
+        return resp;
+    }
+
+    HttpResponse handle_excel_analyze(const HttpRequest &req)
+    {
+        HttpResponse resp;
+        if (!require_json(req, resp))
+            return resp;
+        UserRecord caller;
+        if (!authenticate(req, caller, resp))
+            return resp;
+        std::string owner = extract_json_string(req.body, "owner");
+        if (owner.empty())
+            owner = caller.name;
+        std::string app_name = extract_json_string(req.body, "name");
+        std::string sheet = extract_json_string(req.body, "sheet");
+        std::string range = extract_json_string(req.body, "range");
+        int version = extract_json_int(req.body, "version", 0);
+        
+        if (app_name.empty() || sheet.empty() || range.empty())
+        {
+            resp.status = 400;
+            resp.body = "{\"error\":\"missing app name, sheet, or range\"}";
+            return resp;
+        }
+        if (!is_safe_name(owner) || !is_safe_name(app_name))
+        {
+            resp.status = 400;
+            resp.body = "{\"error\":\"invalid names\"}";
+            return resp;
+        }
+        AppRecord app;
+        if (!db_.get_app(owner, app_name, app))
+        {
+            resp.status = 404;
+            resp.body = "{\"error\":\"app not found\"}";
+            return resp;
+        }
+        // Only owner or admin can analyze (it's a builder feature)
+        if (app.owner != caller.name && !is_admin(caller, cfg_))
+        {
+            resp.status = 403;
+            resp.body = "{\"error\":\"forbidden\"}";
+            return resp;
+        }
+        int ver = version > 0 ? version : app.latest_version;
+        fs::path file_path = version_path(app.owner, app.name, ver) / (app.name + ".xlsx");
+        if (!fs::exists(file_path))
+        {
+            resp.status = 404;
+            resp.body = "{\"error\":\"file not found\"}";
+            return resp;
+        }
+        std::string token = bearer_token(req);
+        if (token.empty())
+        {
+            resp.status = 401;
+            resp.body = "{\"error\":\"missing token\"}";
+            return resp;
+        }
+        std::string err;
+        if (!pool_.ensure_workbook_loaded(token, caller.name, file_path, err))
+        {
+            resp.status = 503;
+            resp.body = "{\"error\":\"" + json_escape(err) + "\"}";
+            log_error("Failed to prepare workbook for analysis owner=" + owner + " app=" + app_name + " err=" + err);
+            return resp;
+        }
+        std::string result_json;
+        if (!pool_.analyze_range(token, sheet, range, result_json, err))
+        {
+            resp.status = 400;
+            resp.body = "{\"error\":\"" + json_escape(err) + "\"}";
+            log_warn("Range analysis failed owner=" + owner + " app=" + app_name + " sheet=" + sheet + " range=" + range + " err=" + err);
+            return resp;
+        }
+        resp.body = result_json;
+        log_info("Analyzed range owner=" + owner + " app=" + app_name + " sheet=" + sheet + " range=" + range);
         return resp;
     }
 
