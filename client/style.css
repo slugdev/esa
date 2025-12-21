@@ -365,11 +365,27 @@ input[type="file"] { padding: 8px; }
 }
 
 .app-widget .widget-chart {
-  font-size: 48px;
+  position: relative;
   text-align: center;
-  padding: 40px;
-  background: rgba(90, 179, 255, 0.1);
+  padding: 8px;
+  background: rgba(90, 179, 255, 0.05);
   border-radius: 8px;
+  min-height: 150px;
+}
+
+.app-widget .widget-chart .chart-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.app-widget .widget-chart .chart-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 14px;
+  color: var(--muted);
 }
 
 .app-widget .widget-datagrid {
@@ -473,7 +489,9 @@ input[type="file"] { padding: 8px; }
 .widget-link { color: var(--accent); text-decoration: underline; cursor: pointer; }
 .widget-image { max-width: 100%; border-radius: 8px; }
 .widget-datagrid { background: rgba(14, 26, 48, 0.7); border: 1px solid var(--border); border-radius: 6px; padding: 12px; min-height: 100px; }
-.widget-chart { background: rgba(14, 26, 48, 0.7); border: 1px solid var(--border); border-radius: 6px; padding: 12px; min-height: 150px; display: grid; place-items: center; color: var(--muted); }
+.widget-chart { background: rgba(14, 26, 48, 0.7); border: 1px solid var(--border); border-radius: 6px; padding: 8px; min-height: 150px; position: relative; }
+.widget-chart .chart-image { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+.widget-chart .chart-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--muted); }
 .widget-formula { font-family: monospace; background: rgba(90, 179, 255, 0.1); padding: 8px 12px; border-radius: 6px; }
 .app-ui-container.preview { padding: 12px; border: 1px dashed var(--border); border-radius: 8px; margin: 8px 0; }
 .app-ui-container .container-label { color: var(--muted); font-size: 13px; margin-bottom: 8px; }

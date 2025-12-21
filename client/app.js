@@ -596,9 +596,15 @@
         if (!component?.sheet || !component?.cell) return;
         try {
           console.log('Querying component:', component.id, component.componentType, component.sheet, component.cell);
-          const value = await queryComponentValue(component);
-          console.log('Got value for', component.id, ':', value);
-          updateComponentDisplay(component.id, value);
+          // Special handling for chart widgets
+          if (component.componentType === 'chart') {
+            const imageData = await queryChartImage(component);
+            updateChartDisplay(component.id, imageData);
+          } else {
+            const value = await queryComponentValue(component);
+            console.log('Got value for', component.id, ':', value);
+            updateComponentDisplay(component.id, value);
+          }
         } catch (err) {
           const reason = err?.message || 'Unable to read cell';
           failures.push(`${component.label || component.cell || 'Field'}: ${reason}`);
@@ -616,6 +622,42 @@
       }
     } finally {
       hideAppProgress();
+    }
+  }
+
+  async function queryChartImage(component) {
+    if (!component?.sheet || !component?.cell) return null;
+    const res = await apiFetch(`${apiBase}/excel/chart`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ sheet: component.sheet, cell: component.cell })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.error || 'Unable to get chart image');
+    }
+    return data?.image || null;
+  }
+
+  function updateChartDisplay(id, base64Image) {
+    const container = appUiForm?.querySelector(`[data-component="${id}"]`);
+    if (!container) return;
+    
+    const img = container.querySelector('.chart-image');
+    const loading = container.querySelector('.chart-loading');
+    
+    if (base64Image) {
+      if (img) {
+        img.src = `data:image/png;base64,${base64Image}`;
+        img.style.display = 'block';
+      }
+      if (loading) loading.style.display = 'none';
+    } else {
+      if (img) img.style.display = 'none';
+      if (loading) {
+        loading.textContent = '📈 No chart found';
+        loading.style.display = 'block';
+      }
     }
   }
 
@@ -945,7 +987,7 @@
         return `<div class="app-widget"${styleAttr}><div class="widget-datagrid" data-component="${id}"><table><tr><th>A</th><th>B</th><th>C</th></tr><tr><td>1</td><td>2</td><td>3</td></tr></table></div></div>`;
       
       case 'chart':
-        return `<div class="app-widget"${styleAttr}><div class="widget-chart" data-component="${id}">📈</div></div>`;
+        return `<div class="app-widget"${styleAttr}><div class="widget-chart" data-component="${id}"><img class="chart-image" alt="Chart" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"><div class="chart-loading">📈 Loading chart...</div></div></div>`;
       
       case 'formula':
         return `<div class="app-widget"${styleAttr}>${labelHtml}<output class="widget-formula" data-component="${id}">= result</output></div>`;

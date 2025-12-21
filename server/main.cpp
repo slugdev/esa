@@ -1081,6 +1081,248 @@ public:
         return true;
     }
 
+    // Export chart image overlapping a specific cell
+    bool export_chart_at_cell(const std::string &session_id, const std::string &sheet, const std::string &cell, std::string &base64_out, std::string &err)
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        int idx = find_slot_locked(session_id);
+        if (idx < 0)
+        {
+            err = "session not found";
+            return false;
+        }
+        auto &slot = slots_[idx];
+        if (!slot.workbook)
+        {
+            err = "no workbook loaded";
+            return false;
+        }
+
+        // Get the worksheet
+        CComPtr<IDispatch> sheets = dispatch_get(slot.workbook, L"Worksheets");
+        if (!sheets)
+        {
+            err = "failed to access worksheets";
+            return false;
+        }
+
+        std::wstring wsheet = utf8_to_wstring(sheet);
+        VARIANT sheet_arg;
+        VariantInit(&sheet_arg);
+        sheet_arg.vt = VT_BSTR;
+        sheet_arg.bstrVal = SysAllocString(wsheet.c_str());
+        VARIANT ws_res;
+        VariantInit(&ws_res);
+        if (!dispatch_invoke(sheets, L"Item", DISPATCH_PROPERTYGET, &sheet_arg, 1, &ws_res) || ws_res.vt != VT_DISPATCH)
+        {
+            SysFreeString(sheet_arg.bstrVal);
+            VariantClear(&ws_res);
+            err = "sheet not found: " + sheet;
+            return false;
+        }
+        SysFreeString(sheet_arg.bstrVal);
+        CComPtr<IDispatch> ws;
+        ws.Attach(ws_res.pdispVal);
+
+        // Get the target cell range to find its position
+        std::wstring wcell = utf8_to_wstring(cell);
+        VARIANT cell_arg;
+        VariantInit(&cell_arg);
+        cell_arg.vt = VT_BSTR;
+        cell_arg.bstrVal = SysAllocString(wcell.c_str());
+        VARIANT cell_res;
+        VariantInit(&cell_res);
+        if (!dispatch_invoke(ws, L"Range", DISPATCH_PROPERTYGET, &cell_arg, 1, &cell_res) || cell_res.vt != VT_DISPATCH)
+        {
+            SysFreeString(cell_arg.bstrVal);
+            VariantClear(&cell_res);
+            err = "invalid cell reference: " + cell;
+            return false;
+        }
+        SysFreeString(cell_arg.bstrVal);
+        CComPtr<IDispatch> cell_range;
+        cell_range.Attach(cell_res.pdispVal);
+
+        // Get cell position (left, top, width, height)
+        VARIANT left_v, top_v, width_v, height_v;
+        VariantInit(&left_v);
+        VariantInit(&top_v);
+        VariantInit(&width_v);
+        VariantInit(&height_v);
+        dispatch_invoke(cell_range, L"Left", DISPATCH_PROPERTYGET, nullptr, 0, &left_v);
+        dispatch_invoke(cell_range, L"Top", DISPATCH_PROPERTYGET, nullptr, 0, &top_v);
+        dispatch_invoke(cell_range, L"Width", DISPATCH_PROPERTYGET, nullptr, 0, &width_v);
+        dispatch_invoke(cell_range, L"Height", DISPATCH_PROPERTYGET, nullptr, 0, &height_v);
+        
+        double cell_left = (left_v.vt == VT_R8) ? left_v.dblVal : 0;
+        double cell_top = (top_v.vt == VT_R8) ? top_v.dblVal : 0;
+        double cell_width = (width_v.vt == VT_R8) ? width_v.dblVal : 0;
+        double cell_height = (height_v.vt == VT_R8) ? height_v.dblVal : 0;
+        double cell_right = cell_left + cell_width;
+        double cell_bottom = cell_top + cell_height;
+        
+        VariantClear(&left_v);
+        VariantClear(&top_v);
+        VariantClear(&width_v);
+        VariantClear(&height_v);
+
+        // Get ChartObjects collection
+        CComPtr<IDispatch> chart_objects = dispatch_get(ws, L"ChartObjects");
+        if (!chart_objects)
+        {
+            err = "no chart objects on sheet";
+            return false;
+        }
+
+        // Get count of chart objects
+        VARIANT count_v;
+        VariantInit(&count_v);
+        dispatch_invoke(chart_objects, L"Count", DISPATCH_PROPERTYGET, nullptr, 0, &count_v);
+        long chart_count = (count_v.vt == VT_I4) ? count_v.lVal : 0;
+        VariantClear(&count_v);
+
+        if (chart_count == 0)
+        {
+            err = "no charts on sheet";
+            return false;
+        }
+
+        // Find chart overlapping the cell
+        CComPtr<IDispatch> found_chart;
+        for (long i = 1; i <= chart_count; ++i)
+        {
+            VARIANT idx_arg;
+            VariantInit(&idx_arg);
+            idx_arg.vt = VT_I4;
+            idx_arg.lVal = i;
+            VARIANT co_res;
+            VariantInit(&co_res);
+            if (!dispatch_invoke(chart_objects, L"Item", DISPATCH_METHOD, &idx_arg, 1, &co_res) || co_res.vt != VT_DISPATCH)
+            {
+                VariantClear(&co_res);
+                continue;
+            }
+            CComPtr<IDispatch> chart_obj;
+            chart_obj.Attach(co_res.pdispVal);
+
+            // Get chart position
+            VARIANT cl, ct, cw, ch;
+            VariantInit(&cl);
+            VariantInit(&ct);
+            VariantInit(&cw);
+            VariantInit(&ch);
+            dispatch_invoke(chart_obj, L"Left", DISPATCH_PROPERTYGET, nullptr, 0, &cl);
+            dispatch_invoke(chart_obj, L"Top", DISPATCH_PROPERTYGET, nullptr, 0, &ct);
+            dispatch_invoke(chart_obj, L"Width", DISPATCH_PROPERTYGET, nullptr, 0, &cw);
+            dispatch_invoke(chart_obj, L"Height", DISPATCH_PROPERTYGET, nullptr, 0, &ch);
+
+            double chart_left = (cl.vt == VT_R8) ? cl.dblVal : 0;
+            double chart_top = (ct.vt == VT_R8) ? ct.dblVal : 0;
+            double chart_width = (cw.vt == VT_R8) ? cw.dblVal : 0;
+            double chart_height = (ch.vt == VT_R8) ? ch.dblVal : 0;
+            double chart_right = chart_left + chart_width;
+            double chart_bottom = chart_top + chart_height;
+
+            VariantClear(&cl);
+            VariantClear(&ct);
+            VariantClear(&cw);
+            VariantClear(&ch);
+
+            // Check if chart overlaps cell (any intersection)
+            bool overlaps = !(chart_right < cell_left || chart_left > cell_right ||
+                              chart_bottom < cell_top || chart_top > cell_bottom);
+            
+            if (overlaps)
+            {
+                found_chart = chart_obj;
+                break;
+            }
+        }
+
+        if (!found_chart)
+        {
+            err = "no chart overlapping cell " + cell;
+            return false;
+        }
+
+        // Get the Chart object from ChartObject
+        CComPtr<IDispatch> chart = dispatch_get(found_chart, L"Chart");
+        if (!chart)
+        {
+            err = "failed to get chart object";
+            return false;
+        }
+
+        // Create temporary file path for export
+        wchar_t temp_path[MAX_PATH];
+        wchar_t temp_file[MAX_PATH];
+        GetTempPathW(MAX_PATH, temp_path);
+        GetTempFileNameW(temp_path, L"chart", 0, temp_file);
+        std::wstring png_path = std::wstring(temp_file) + L".png";
+        DeleteFileW(temp_file); // Remove the 0-byte temp file
+
+        // Export chart as PNG
+        // Chart.Export(Filename, FilterName, Interactive)
+        VARIANT args[3];
+        VariantInit(&args[0]);
+        VariantInit(&args[1]);
+        VariantInit(&args[2]);
+        
+        args[2].vt = VT_BSTR;
+        args[2].bstrVal = SysAllocString(png_path.c_str());
+        args[1].vt = VT_BSTR;
+        args[1].bstrVal = SysAllocString(L"PNG");
+        args[0].vt = VT_BOOL;
+        args[0].boolVal = VARIANT_FALSE;
+
+        VARIANT export_res;
+        VariantInit(&export_res);
+        bool export_ok = dispatch_invoke(chart, L"Export", DISPATCH_METHOD, args, 3, &export_res);
+        
+        SysFreeString(args[2].bstrVal);
+        SysFreeString(args[1].bstrVal);
+        VariantClear(&export_res);
+
+        if (!export_ok)
+        {
+            err = "failed to export chart image";
+            return false;
+        }
+
+        // Read the PNG file and encode as base64
+        std::ifstream file(png_path, std::ios::binary);
+        if (!file)
+        {
+            err = "failed to read exported chart image";
+            DeleteFileW(png_path.c_str());
+            return false;
+        }
+
+        std::vector<unsigned char> buffer(std::istreambuf_iterator<char>(file), {});
+        file.close();
+        DeleteFileW(png_path.c_str());
+
+        // Base64 encode
+        static const char b64_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        std::string encoded;
+        encoded.reserve(((buffer.size() + 2) / 3) * 4);
+        
+        for (size_t i = 0; i < buffer.size(); i += 3)
+        {
+            unsigned int n = buffer[i] << 16;
+            if (i + 1 < buffer.size()) n |= buffer[i + 1] << 8;
+            if (i + 2 < buffer.size()) n |= buffer[i + 2];
+            
+            encoded.push_back(b64_chars[(n >> 18) & 0x3F]);
+            encoded.push_back(b64_chars[(n >> 12) & 0x3F]);
+            encoded.push_back((i + 1 < buffer.size()) ? b64_chars[(n >> 6) & 0x3F] : '=');
+            encoded.push_back((i + 2 < buffer.size()) ? b64_chars[n & 0x3F] : '=');
+        }
+
+        base64_out = encoded;
+        return true;
+    }
+
     bool ensure_workbook_loaded(const std::string &session_id, const std::string &user, const fs::path &path, std::string &err)
     {
         fs::path resolved = fs::absolute(path);
@@ -2054,6 +2296,8 @@ private:
             return handle_excel_sheets(req);
         if (req.method == "POST" && req.path == "/excel/analyze")
             return handle_excel_analyze(req);
+        if (req.method == "POST" && req.path == "/excel/chart")
+            return handle_excel_chart(req);
         if (req.method == "POST" && req.path == "/apps/ui/get")
             return handle_ui_get(req);
         if (req.method == "POST" && req.path == "/apps/ui/save")
@@ -2529,6 +2773,84 @@ private:
         }
         resp.body = result_json;
         log_info("Analyzed range owner=" + owner + " app=" + app_name + " sheet=" + sheet + " range=" + range);
+        return resp;
+    }
+
+    HttpResponse handle_excel_chart(const HttpRequest &req)
+    {
+        HttpResponse resp;
+        if (!require_json(req, resp))
+            return resp;
+        UserRecord caller;
+        if (!authenticate(req, caller, resp))
+            return resp;
+        std::string owner = extract_json_string(req.body, "owner");
+        if (owner.empty())
+            owner = caller.name;
+        std::string app_name = extract_json_string(req.body, "name");
+        std::string sheet = extract_json_string(req.body, "sheet");
+        std::string cell = extract_json_string(req.body, "cell");
+        int version = extract_json_int(req.body, "version", 0);
+        
+        if (app_name.empty() || sheet.empty() || cell.empty())
+        {
+            resp.status = 400;
+            resp.body = "{\"error\":\"missing app name, sheet, or cell\"}";
+            return resp;
+        }
+        if (!is_safe_name(owner) || !is_safe_name(app_name))
+        {
+            resp.status = 400;
+            resp.body = "{\"error\":\"invalid names\"}";
+            return resp;
+        }
+        AppRecord app;
+        if (!db_.get_app(owner, app_name, app))
+        {
+            resp.status = 404;
+            resp.body = "{\"error\":\"app not found\"}";
+            return resp;
+        }
+        // Check access
+        if (!can_access(app, caller, cfg_))
+        {
+            resp.status = 403;
+            resp.body = "{\"error\":\"forbidden\"}";
+            return resp;
+        }
+        int ver = version > 0 ? version : app.latest_version;
+        fs::path file_path = version_path(app.owner, app.name, ver) / (app.name + ".xlsx");
+        if (!fs::exists(file_path))
+        {
+            resp.status = 404;
+            resp.body = "{\"error\":\"file not found\"}";
+            return resp;
+        }
+        std::string token = bearer_token(req);
+        if (token.empty())
+        {
+            resp.status = 401;
+            resp.body = "{\"error\":\"missing token\"}";
+            return resp;
+        }
+        std::string err;
+        if (!pool_.ensure_workbook_loaded(token, caller.name, file_path, err))
+        {
+            resp.status = 503;
+            resp.body = "{\"error\":\"" + json_escape(err) + "\"}";
+            log_error("Failed to prepare workbook for chart export owner=" + owner + " app=" + app_name + " err=" + err);
+            return resp;
+        }
+        std::string base64_image;
+        if (!pool_.export_chart_at_cell(token, sheet, cell, base64_image, err))
+        {
+            resp.status = 400;
+            resp.body = "{\"error\":\"" + json_escape(err) + "\"}";
+            log_warn("Chart export failed owner=" + owner + " app=" + app_name + " sheet=" + sheet + " cell=" + cell + " err=" + err);
+            return resp;
+        }
+        resp.body = "{\"image\":\"" + base64_image + "\"}";
+        log_info("Exported chart owner=" + owner + " app=" + app_name + " sheet=" + sheet + " cell=" + cell);
         return resp;
     }
 
