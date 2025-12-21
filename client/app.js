@@ -598,8 +598,14 @@
           console.log('Querying component:', component.id, component.componentType, component.sheet, component.cell);
           // Special handling for chart widgets
           if (component.componentType === 'chart') {
-            const imageData = await queryChartImage(component);
-            updateChartDisplay(component.id, imageData);
+            try {
+              const imageData = await queryChartImage(component);
+              updateChartDisplay(component.id, imageData);
+            } catch (chartErr) {
+              // Chart errors are not critical - just show "no chart" state
+              console.warn('Chart not found:', component.id, chartErr?.message);
+              updateChartDisplay(component.id, null);
+            }
           } else {
             const value = await queryComponentValue(component);
             console.log('Got value for', component.id, ':', value);
@@ -627,10 +633,16 @@
 
   async function queryChartImage(component) {
     if (!component?.sheet || !component?.cell) return null;
+    if (!activeApp?.owner || !activeApp?.name) return null;
     const res = await apiFetch(`${apiBase}/excel/chart`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ sheet: component.sheet, cell: component.cell })
+      body: JSON.stringify({ 
+        owner: activeApp.owner, 
+        name: activeApp.name, 
+        sheet: component.sheet, 
+        cell: component.cell 
+      })
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {

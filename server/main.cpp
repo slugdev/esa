@@ -1166,13 +1166,17 @@ public:
         VariantClear(&width_v);
         VariantClear(&height_v);
 
-        // Get ChartObjects collection
-        CComPtr<IDispatch> chart_objects = dispatch_get(ws, L"ChartObjects");
-        if (!chart_objects)
+        // Get ChartObjects collection (ChartObjects is a method, not a property)
+        VARIANT chart_objs_res;
+        VariantInit(&chart_objs_res);
+        if (!dispatch_invoke(ws, L"ChartObjects", DISPATCH_METHOD, nullptr, 0, &chart_objs_res) || chart_objs_res.vt != VT_DISPATCH)
         {
+            VariantClear(&chart_objs_res);
             err = "no chart objects on sheet";
             return false;
         }
+        CComPtr<IDispatch> chart_objects;
+        chart_objects.Attach(chart_objs_res.pdispVal);
 
         // Get count of chart objects
         VARIANT count_v;
