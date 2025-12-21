@@ -119,9 +119,14 @@
   const builderClose = qs('#ui-builder-close');
   const builderAppLabel = qs('#builder-app-label');
   const builderSaveLayoutBtn = qs('#builder-save-layout');
-  const builderImportSheet = qs('#builder-import-sheet');
-  const builderImportRange = qs('#builder-import-range');
-  const builderImportExcel = qs('#builder-import-excel');
+  const propImportExcel = qs('#prop-import-excel');
+  // Import dialog elements
+  const importModal = qs('#import-excel-modal');
+  const importSheet = qs('#import-sheet');
+  const importRange = qs('#import-range');
+  const importForm = qs('#import-excel-form');
+  const importClose = qs('#import-excel-close');
+  const importCancel = qs('#import-excel-cancel');
   const builderWidgetTree = qs('#builder-widget-tree');
   const builderTreeRoot = qs('#builder-tree-root');
   const builderEmpty = qs('#builder-empty');
@@ -327,7 +332,13 @@
   propDeleteWidget?.addEventListener('click', handleDeleteWidget);
   propDeleteApp?.addEventListener('click', handleDeleteApp);
   builderSaveLayoutBtn?.addEventListener('click', () => saveBuilderLayout());
-  builderImportExcel?.addEventListener('click', handleExcelImport);
+  propImportExcel?.addEventListener('click', openImportDialog);
+  importForm?.addEventListener('submit', handleExcelImport);
+  importClose?.addEventListener('click', closeImportDialog);
+  importCancel?.addEventListener('click', closeImportDialog);
+  importModal?.addEventListener('click', (e) => {
+    if (e.target === importModal) closeImportDialog();
+  });
   
   // Sash resize functionality
   if (builderSash && builderTreePanel && builderPropertiesPanel) {
@@ -1365,6 +1376,7 @@
     
     // Add dropdown for containers, delete button for all widgets
     const addDropdown = isContainer ? renderAddWidgetDropdown(widget.id, widget.type) : '';
+    const importBtn = isContainer ? `<button type="button" class="tree-import-btn" data-import-widget="${widget.id}" title="Import from Excel">📥</button>` : '';
     const moveUpBtn = `<button type="button" class="tree-move-btn" data-move-widget="${widget.id}" data-direction="up" title="Move up">↑</button>`;
     const moveDownBtn = `<button type="button" class="tree-move-btn" data-move-widget="${widget.id}" data-direction="down" title="Move down">↓</button>`;
     const deleteBtn = `<button type="button" class="tree-delete-btn" data-delete-widget="${widget.id}" title="Delete widget">×</button>`;
@@ -1380,6 +1392,7 @@
         <div class="tree-node-actions">
           ${moveUpBtn}
           ${moveDownBtn}
+          ${importBtn}
           ${addDropdown}
           ${deleteBtn}
         </div>
@@ -1676,6 +1689,17 @@
       const widgetId = moveBtn.dataset.moveWidget;
       const direction = moveBtn.dataset.direction;
       moveWidgetInSiblings(widgetId, direction);
+      return;
+    }
+    
+    // Handle import button click
+    const importBtn = e.target.closest('[data-import-widget]');
+    if (importBtn) {
+      e.stopPropagation();
+      const widgetId = importBtn.dataset.importWidget;
+      builderSelectedWidget = widgetId;
+      renderWidgetTree();
+      openImportDialog();
       return;
     }
     
@@ -2037,19 +2061,6 @@
   function setSheetOptions(sheets, preferred) {
     builderSheets = Array.isArray(sheets) ? sheets.filter(Boolean) : [];
     renderSheetOptions(preferred);
-    renderImportSheetOptions();
-  }
-
-  function renderImportSheetOptions() {
-    if (!builderImportSheet) return;
-    if (!builderSheets.length) {
-      builderImportSheet.innerHTML = '<option value="">No sheets</option>';
-      builderImportSheet.disabled = true;
-      return;
-    }
-    builderImportSheet.disabled = false;
-    builderImportSheet.innerHTML = '<option value="">Sheet...</option>' +
-      builderSheets.map(sheet => `<option value="${escapeHtml(sheet)}">${escapeHtml(sheet)}</option>`).join('');
   }
 
   function ensureSheetOption(sheet) {
@@ -2097,10 +2108,50 @@
     }
   }
 
-  async function handleExcelImport() {
+  function openImportDialog() {
     if (!builderTarget) return showToast('No app selected', true);
-    const sheet = builderImportSheet?.value;
-    const range = builderImportRange?.value?.trim();
+    if (!builderSelectedWidget || builderSelectedWidget === 'app-root') {
+      return showToast('Select a container widget first', true);
+    }
+    const widget = findWidgetById(builderWidgets, builderSelectedWidget);
+    if (!widget || !WIDGET_TYPES[widget.type]?.isContainer) {
+      return showToast('Select a container widget (Panel, BoxSizer, etc.)', true);
+    }
+    
+    // Populate sheet dropdown
+    if (importSheet) {
+      importSheet.innerHTML = '<option value="">Select a sheet...</option>';
+      builderSheets.forEach(sheet => {
+        const opt = document.createElement('option');
+        opt.value = sheet;
+        opt.textContent = sheet;
+        importSheet.appendChild(opt);
+      });
+    }
+    if (importRange) importRange.value = '';
+    
+    // Show dialog
+    if (importModal) {
+      importModal.classList.remove('hidden');
+      importModal.setAttribute('aria-hidden', 'false');
+    }
+  }
+
+  function closeImportDialog() {
+    if (importModal) {
+      if (importModal.contains(document.activeElement)) {
+        document.activeElement.blur();
+      }
+      importModal.classList.add('hidden');
+      importModal.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  async function handleExcelImport(e) {
+    e?.preventDefault();
+    if (!builderTarget) return showToast('No app selected', true);
+    const sheet = importSheet?.value;
+    const range = importRange?.value?.trim();
     if (!sheet) return showToast('Select a sheet first', true);
     if (!range) return showToast('Enter a cell range (e.g., A1:C5)', true);
     
@@ -2125,8 +2176,9 @@
       // Create a grid sizer with widgets matching the Excel layout
       const gridWidget = createGridFromCells(data.cells, data.rowCount, data.colCount, sheet);
       
-      // Add the grid to the builder
+      // Add the grid to the selected container
       addImportedWidgets([gridWidget]);
+      closeImportDialog();
       const widgetCount = data.cells.filter(c => c.type !== 'empty').length;
       showToast(`Imported ${data.rowCount}×${data.colCount} grid with ${widgetCount} widget${widgetCount !== 1 ? 's' : ''}`);
       
@@ -2360,6 +2412,9 @@
 
   function closePreviewModal() {
     if (!previewModal) return;
+    if (previewModal.contains(document.activeElement)) {
+      document.activeElement.blur();
+    }
     previewModal.classList.add('hidden');
     previewModal.setAttribute('aria-hidden', 'true');
     const otherModalOpen = (devModal && !devModal.classList.contains('hidden')) || (builderModal && !builderModal.classList.contains('hidden'));
@@ -2690,6 +2745,10 @@
       if (!confirm('You have unsaved changes. Are you sure you want to close the App Builder?')) {
         return;
       }
+    }
+    // Move focus out before hiding to avoid aria-hidden warning
+    if (builderModal.contains(document.activeElement)) {
+      document.activeElement.blur();
     }
     builderModal.classList.add('hidden');
     builderModal.setAttribute('aria-hidden', 'true');

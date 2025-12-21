@@ -565,6 +565,17 @@ input[type="file"] { padding: 8px; }
 }
 .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .modal-dialog.modal-lg { width: min(940px, calc(100% - 32px)); }
+.modal-dialog.modal-small { width: min(380px, calc(100% - 32px)); }
+
+/* Import Dialog */
+#import-excel-form { display: flex; flex-direction: column; gap: 16px; margin-top: 16px; }
+#import-excel-form .form-group { display: flex; flex-direction: column; gap: 6px; }
+#import-excel-form .form-group label { font-weight: 500; color: var(--text); }
+#import-excel-form .form-hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+#import-excel-form .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+/* Button block style */
+.btn-block { display: block; width: 100%; margin-top: 8px; }
 .builder-panel { display: flex; flex-direction: column; gap: 12px; height: 100%; overflow-y: auto; }
 .builder-panel-head { margin: 0; padding-bottom: 12px; border-bottom: 1px solid rgba(90, 179, 255, 0.2); display: flex; justify-content: space-between; align-items: center; }
 .builder-components { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; }
@@ -1210,6 +1221,28 @@ input[type="file"] { padding: 8px; }
   background: rgba(255, 80, 80, 0.2);
   border-color: rgba(255, 80, 80, 0.6);
   color: #ff6464;
+}
+
+.tree-import-btn {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid rgba(100, 200, 100, 0.3);
+  color: rgba(100, 200, 100, 0.8);
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 1;
+  transition: all 0.15s;
+}
+
+.tree-import-btn:hover {
+  background: rgba(100, 200, 100, 0.2);
+  border-color: rgba(100, 200, 100, 0.6);
+  color: #64c864;
 }
 
 .tree-move-btn {

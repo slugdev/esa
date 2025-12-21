@@ -147,13 +147,6 @@
           <span id="builder-app-label" class="pill" style="margin-left: 12px;">No app</span>
         </div>
         <div class="builder-header-actions">
-          <div class="excel-import-group">
-            <select id="builder-import-sheet" title="Select sheet">
-              <option value="">Sheet...</option>
-            </select>
-            <input type="text" id="builder-import-range" placeholder="A1:C5" title="Excel range to import">
-            <button type="button" id="builder-import-excel" class="btn-small" title="Analyze range and generate widgets">Import</button>
-          </div>
           <button type="button" id="builder-save-layout" class="btn-small">Save Layout</button>
           <button type="button" id="ui-builder-close" class="ghost">Close</button>
         </div>
@@ -260,6 +253,7 @@
                 <label>H Gap <input type="number" id="prop-hgap" min="0" value="4"></label>
                 <label>V Gap <input type="number" id="prop-vgap" min="0" value="4"></label>
               </div>
+              <button type="button" id="prop-import-excel" class="btn-small btn-block">📥 Import from Excel</button>
             </fieldset>
             
             <!-- Input Properties -->
@@ -358,6 +352,33 @@
       <div class="actions">
         <button type="button" id="ui-preview-close-btn" class="ghost">Close</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Import from Excel Dialog -->
+  <div id="import-excel-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-dialog modal-small" role="dialog" aria-modal="true" aria-labelledby="import-excel-title">
+      <div class="modal-head">
+        <h3 id="import-excel-title">Import from Excel</h3>
+        <button type="button" id="import-excel-close" class="ghost icon-btn" aria-label="Close">&#10005;</button>
+      </div>
+      <form id="import-excel-form">
+        <div class="form-group">
+          <label for="import-sheet">Sheet</label>
+          <select id="import-sheet" required>
+            <option value="">Select a sheet...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="import-range">Cell Range</label>
+          <input type="text" id="import-range" placeholder="A1:C5" required>
+          <small class="form-hint">Enter the range to import (e.g., A1:C5)</small>
+        </div>
+        <div class="actions">
+          <button type="button" id="import-excel-cancel" class="ghost">Cancel</button>
+          <button type="submit" class="btn-small">Import</button>
+        </div>
+      </form>
     </div>
   </div>
 
