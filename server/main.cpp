@@ -1106,7 +1106,7 @@ public:
             return false;
         }
 
-        std::wstring wsheet = utf8_to_wstring(sheet);
+        std::wstring wsheet(sheet.begin(), sheet.end());
         VARIANT sheet_arg;
         VariantInit(&sheet_arg);
         sheet_arg.vt = VT_BSTR;
@@ -1125,7 +1125,7 @@ public:
         ws.Attach(ws_res.pdispVal);
 
         // Get the target cell range to find its position
-        std::wstring wcell = utf8_to_wstring(cell);
+        std::wstring wcell(cell.begin(), cell.end());
         VARIANT cell_arg;
         VariantInit(&cell_arg);
         cell_arg.vt = VT_BSTR;
@@ -2812,7 +2812,7 @@ private:
             return resp;
         }
         // Check access
-        if (!can_access(app, caller, cfg_))
+        if (!can_access(app, caller) && !is_admin(caller, cfg_))
         {
             resp.status = 403;
             resp.body = "{\"error\":\"forbidden\"}";
