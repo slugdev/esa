@@ -449,6 +449,22 @@ input[type="file"] { padding: 8px; }
   background: rgba(255, 100, 100, 0.2);
 }
 
+/* Sticky header for Excel Grid */
+.widget-excelgrid.has-sticky-header .excelgrid-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.widget-excelgrid .excelgrid-table th {
+  background: rgba(17, 34, 61, 0.95);
+  border: 1px solid rgba(90, 179, 255, 0.2);
+  padding: 8px 10px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--accent);
+}
+
 .app-widget .widget-datagrid table {
   width: 100%;
   border-collapse: collapse;

@@ -188,6 +188,8 @@
   const propGroupLabel = qs('#prop-group-label');
   const propGroupSizer = qs('#prop-group-sizer');
   const propGroupInput = qs('#prop-group-input');
+  const propGroupExcelGrid = qs('#prop-group-excelgrid');
+  const propStickyHeader = qs('#prop-sticky-header');
   const propGroupExcel = qs('#prop-group-excel');
   const propGroupAction = qs('#prop-group-action');
   const previewModal = qs('#ui-preview-modal');
@@ -732,24 +734,58 @@
     
     // Determine if editable based on mode
     const isEditable = component?.mode === 'input' || component?.mode === 'bidirectional';
+    const stickyHeader = component?.properties?.stickyHeader || false;
     
     // Build table HTML
     let html = '';
-    rows.forEach((row, rowIdx) => {
-      html += '<tr>';
-      const cells = Array.isArray(row) ? row : [row];
-      cells.forEach((cell, colIdx) => {
+    
+    if (stickyHeader && rows.length > 0) {
+      // First row is header
+      html += '<thead><tr>';
+      const headerCells = Array.isArray(rows[0]) ? rows[0] : [rows[0]];
+      headerCells.forEach(cell => {
         const cellValue = cell != null ? String(cell) : '';
-        if (isEditable) {
-          html += `<td><input type="text" class="excelgrid-cell" data-row="${rowIdx}" data-col="${colIdx}" value="${escapeHtml(cellValue)}"></td>`;
-        } else {
-          html += `<td>${escapeHtml(cellValue)}</td>`;
-        }
+        html += `<th>${escapeHtml(cellValue)}</th>`;
       });
-      html += '</tr>';
-    });
+      html += '</tr></thead><tbody>';
+      
+      // Remaining rows are data
+      rows.slice(1).forEach((row, rowIdx) => {
+        html += '<tr>';
+        const cells = Array.isArray(row) ? row : [row];
+        cells.forEach((cell, colIdx) => {
+          const cellValue = cell != null ? String(cell) : '';
+          const actualRowIdx = rowIdx + 1; // Offset for header row
+          if (isEditable) {
+            html += `<td><input type="text" class="excelgrid-cell" data-row="${actualRowIdx}" data-col="${colIdx}" value="${escapeHtml(cellValue)}"></td>`;
+          } else {
+            html += `<td>${escapeHtml(cellValue)}</td>`;
+          }
+        });
+        html += '</tr>';
+      });
+      html += '</tbody>';
+    } else {
+      // No header - all rows are data
+      rows.forEach((row, rowIdx) => {
+        html += '<tr>';
+        const cells = Array.isArray(row) ? row : [row];
+        cells.forEach((cell, colIdx) => {
+          const cellValue = cell != null ? String(cell) : '';
+          if (isEditable) {
+            html += `<td><input type="text" class="excelgrid-cell" data-row="${rowIdx}" data-col="${colIdx}" value="${escapeHtml(cellValue)}"></td>`;
+          } else {
+            html += `<td>${escapeHtml(cellValue)}</td>`;
+          }
+        });
+        html += '</tr>';
+      });
+    }
     
     table.innerHTML = html;
+    
+    // Toggle sticky class on container
+    container.classList.toggle('has-sticky-header', stickyHeader);
     
     // Add change handlers for editable cells
     if (isEditable) {
@@ -978,7 +1014,8 @@
           sheet: w.excel.sheet,
           cell: w.excel.cell,
           mode: w.excel.mode,
-          componentType: w.type
+          componentType: w.type,
+          properties: w.properties || {}
         });
       }
       if (w.children) {
@@ -2103,6 +2140,9 @@
     if (propStep) propStep.value = props.step ?? 1;
     if (propDefault) propDefault.value = props.defaultValue || '';
     
+    // Excel Grid options
+    if (propStickyHeader) propStickyHeader.checked = props.stickyHeader || false;
+    
     // Excel binding
     if (propExcelEnabled) propExcelEnabled.checked = excel.enabled;
     if (propExcelFields) propExcelFields.classList.toggle('hidden', !excel.enabled);
@@ -2157,6 +2197,11 @@
     if (propGroupExcel) {
       const noExcel = ['separator', 'spacer', 'boxsizer-v', 'boxsizer-h', 'gridsizer'].includes(type);
       propGroupExcel.classList.toggle('hidden', noExcel);
+    }
+    
+    // Excel Grid options - only for excelgrid/datagrid
+    if (propGroupExcelGrid) {
+      propGroupExcelGrid.classList.toggle('hidden', !['excelgrid', 'datagrid'].includes(type));
     }
     
     // Action section - only for buttons/links
@@ -2218,6 +2263,9 @@
     widget.properties.max = Number(propMax?.value ?? 100);
     widget.properties.step = Number(propStep?.value ?? 1);
     widget.properties.defaultValue = propDefault?.value || '';
+    
+    // Excel Grid
+    widget.properties.stickyHeader = propStickyHeader?.checked || false;
     
     // Excel
     widget.excel = widget.excel || {};
