@@ -53,7 +53,7 @@
     togglebtn: { category: 'action', icon: '🔀', label: 'Toggle' },
     link: { category: 'action', icon: '🔗', label: 'Link' },
     // Data
-    datagrid: { category: 'data', icon: '📊', label: 'Data Grid', requiresExcel: true },
+    excelgrid: { category: 'data', icon: '📊', label: 'Excel Grid', requiresExcel: true },
     chart: { category: 'data', icon: '📈', label: 'Chart', requiresExcel: true },
     formula: { category: 'data', icon: '∑', label: 'Formula', requiresExcel: true }
   };
@@ -606,6 +606,15 @@
               console.warn('Chart not found:', component.id, chartErr?.message);
               updateChartDisplay(component.id, null);
             }
+          } else if (component.componentType === 'excelgrid' || component.componentType === 'datagrid') {
+            // Excel grid - fetch range data
+            try {
+              const gridData = await queryExcelRange(component);
+              updateExcelGridDisplay(component.id, gridData, component);
+            } catch (gridErr) {
+              console.warn('Excel grid error:', component.id, gridErr?.message);
+              updateExcelGridDisplay(component.id, null, component);
+            }
           } else {
             const value = await queryComponentValue(component);
             console.log('Got value for', component.id, ':', value);
@@ -671,6 +680,148 @@
         loading.style.display = 'block';
       }
     }
+  }
+
+  async function queryExcelRange(component) {
+    if (!component?.sheet || !component?.cell) return null;
+    const res = await apiFetch(`${apiBase}/excel/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ sheet: component.sheet, range: component.cell })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.error || 'Unable to read range');
+    }
+    return data?.value ?? null;
+  }
+
+  function updateExcelGridDisplay(id, data, component) {
+    const container = appUiForm?.querySelector(`[data-component="${id}"]`);
+    if (!container) return;
+    
+    const loading = container.querySelector('.excelgrid-loading');
+    const table = container.querySelector('.excelgrid-table');
+    
+    if (!data) {
+      if (loading) {
+        loading.textContent = '📊 No data';
+        loading.style.display = 'block';
+      }
+      if (table) table.innerHTML = '';
+      return;
+    }
+    
+    if (loading) loading.style.display = 'none';
+    if (!table) return;
+    
+    // Normalize data to 2D array
+    let rows;
+    if (Array.isArray(data)) {
+      if (Array.isArray(data[0])) {
+        // Already 2D array
+        rows = data;
+      } else {
+        // 1D array - make it a single row
+        rows = [data];
+      }
+    } else {
+      // Single value
+      rows = [[data]];
+    }
+    
+    // Determine if editable based on mode
+    const isEditable = component?.mode === 'input' || component?.mode === 'bidirectional';
+    
+    // Build table HTML
+    let html = '';
+    rows.forEach((row, rowIdx) => {
+      html += '<tr>';
+      const cells = Array.isArray(row) ? row : [row];
+      cells.forEach((cell, colIdx) => {
+        const cellValue = cell != null ? String(cell) : '';
+        if (isEditable) {
+          html += `<td><input type="text" class="excelgrid-cell" data-row="${rowIdx}" data-col="${colIdx}" value="${escapeHtml(cellValue)}"></td>`;
+        } else {
+          html += `<td>${escapeHtml(cellValue)}</td>`;
+        }
+      });
+      html += '</tr>';
+    });
+    
+    table.innerHTML = html;
+    
+    // Add change handlers for editable cells
+    if (isEditable) {
+      table.querySelectorAll('.excelgrid-cell').forEach(input => {
+        input.addEventListener('change', (e) => handleExcelGridCellChange(e, component));
+      });
+    }
+  }
+
+  async function handleExcelGridCellChange(e, component) {
+    const input = e.target;
+    const rowIdx = parseInt(input.dataset.row, 10);
+    const colIdx = parseInt(input.dataset.col, 10);
+    const newValue = input.value;
+    
+    // Parse the range to get the base cell
+    const baseRange = component.cell;
+    const cellAddress = offsetCellAddress(baseRange, rowIdx, colIdx);
+    
+    if (!cellAddress) {
+      console.warn('Could not calculate cell address for grid edit');
+      return;
+    }
+    
+    try {
+      const res = await apiFetch(`${apiBase}/excel/set`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ sheet: component.sheet, range: cellAddress, value: newValue })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || 'Failed to update cell');
+      }
+      input.classList.add('saved');
+      setTimeout(() => input.classList.remove('saved'), 500);
+    } catch (err) {
+      console.error('Failed to update grid cell:', err);
+      input.classList.add('error');
+      setTimeout(() => input.classList.remove('error'), 1000);
+    }
+  }
+
+  function offsetCellAddress(range, rowOffset, colOffset) {
+    // Parse range like "A1:C5" or "A1" and offset to specific cell
+    const match = range.match(/^([A-Z]+)(\d+)/i);
+    if (!match) return null;
+    
+    const baseCol = match[1].toUpperCase();
+    const baseRow = parseInt(match[2], 10);
+    
+    // Convert column letters to number (A=0, B=1, etc.)
+    let colNum = 0;
+    for (let i = 0; i < baseCol.length; i++) {
+      colNum = colNum * 26 + (baseCol.charCodeAt(i) - 64);
+    }
+    colNum -= 1; // Make 0-indexed
+    
+    // Apply offsets
+    const newColNum = colNum + colOffset;
+    const newRow = baseRow + rowOffset;
+    
+    // Convert back to column letters
+    let newCol = '';
+    let c = newColNum + 1; // 1-indexed for conversion
+    while (c > 0) {
+      c--;
+      newCol = String.fromCharCode(65 + (c % 26)) + newCol;
+      c = Math.floor(c / 26);
+    }
+    
+    return newCol + newRow;
   }
 
   async function queryComponentValue(component) {
@@ -996,7 +1147,8 @@
         return `<div class="widget-spacer" style="height: ${spacerH};"${styleAttr}></div>`;
       
       case 'datagrid':
-        return `<div class="app-widget"${styleAttr}><div class="widget-datagrid" data-component="${id}"><table><tr><th>A</th><th>B</th><th>C</th></tr><tr><td>1</td><td>2</td><td>3</td></tr></table></div></div>`;
+      case 'excelgrid':
+        return `<div class="app-widget"${styleAttr}><div class="widget-excelgrid" data-component="${id}"><div class="excelgrid-loading">📊 Loading data...</div><table class="excelgrid-table"></table></div></div>`;
       
       case 'chart':
         return `<div class="app-widget"${styleAttr}><div class="widget-chart" data-component="${id}"><img class="chart-image" alt="Chart" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"><div class="chart-loading">📈 Loading chart...</div></div></div>`;
@@ -1630,7 +1782,8 @@
       case 'spacer':
         return `<div class="preview-spacer"></div>`;
       case 'datagrid':
-        return `<div class="preview-datagrid"><table><tr><th>A</th><th>B</th><th>C</th></tr><tr><td>1</td><td>2</td><td>3</td></tr><tr><td>4</td><td>5</td><td>6</td></tr></table></div>`;
+      case 'excelgrid':
+        return `<div class="preview-excelgrid"><table><tr><th>A</th><th>B</th><th>C</th></tr><tr><td>1</td><td>2</td><td>3</td></tr><tr><td>4</td><td>5</td><td>6</td></tr></table></div>`;
       case 'chart':
         return `<div class="preview-chart">📈</div>`;
       case 'formula':
