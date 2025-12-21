@@ -141,6 +141,39 @@ std::string base64_encode(const std::string &input)
     return out;
 }
 
+std::string url_decode(const std::string &input)
+{
+    std::string out;
+    out.reserve(input.size());
+    for (size_t i = 0; i < input.size(); ++i)
+    {
+        if (input[i] == '%' && i + 2 < input.size())
+        {
+            int hi = 0, lo = 0;
+            char c1 = input[i + 1], c2 = input[i + 2];
+            if (c1 >= '0' && c1 <= '9') hi = c1 - '0';
+            else if (c1 >= 'A' && c1 <= 'F') hi = c1 - 'A' + 10;
+            else if (c1 >= 'a' && c1 <= 'f') hi = c1 - 'a' + 10;
+            else { out.push_back(input[i]); continue; }
+            if (c2 >= '0' && c2 <= '9') lo = c2 - '0';
+            else if (c2 >= 'A' && c2 <= 'F') lo = c2 - 'A' + 10;
+            else if (c2 >= 'a' && c2 <= 'f') lo = c2 - 'a' + 10;
+            else { out.push_back(input[i]); continue; }
+            out.push_back(static_cast<char>((hi << 4) | lo));
+            i += 2;
+        }
+        else if (input[i] == '+')
+        {
+            out.push_back(' ');
+        }
+        else
+        {
+            out.push_back(input[i]);
+        }
+    }
+    return out;
+}
+
 // -------------------- Utility: naive JSON extraction --------------------
 // Very small helper to pull primitive values from a flat JSON object.
 std::string extract_json_string(const std::string &body, const std::string &key)
@@ -2944,7 +2977,7 @@ private:
         UserRecord caller;
         if (!authenticate(req, caller, resp))
             return resp;
-        std::string app_name = req.path.substr(std::string("/apps/").size());
+        std::string app_name = url_decode(req.path.substr(std::string("/apps/").size()));
         if (app_name.empty())
         {
             resp.status = 400;
@@ -3207,7 +3240,7 @@ private:
         UserRecord caller;
         if (!authenticate(req, caller, resp))
             return resp;
-        std::string app_name = req.path.substr(std::string("/apps/").size());
+        std::string app_name = url_decode(req.path.substr(std::string("/apps/").size()));
         if (app_name.empty())
         {
             resp.status = 400;
