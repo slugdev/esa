@@ -2743,10 +2743,14 @@
       if (!isUpdate) {
         const file_base64 = await fileToBase64(file);
         if (!file_base64) return showToast('Failed to read file', true);
-        const payload = { name, description, file_base64, public: isPublic };
+        // Extract file extension from filename
+        const fileName = file.name || '';
+        const lowerName = fileName.toLowerCase();
+        const fileExt = lowerName.endsWith('.xlsm') ? '.xlsm' : lowerName.endsWith('.xls') ? '.xls' : '.xlsx';
+        const payload = { name, description, file_base64, file_extension: fileExt, public: isPublic };
         if (access_group) payload.access_group = access_group;
         if (image_base64) payload.image_base64 = image_base64;
-        console.log('Creating app with payload:', { name, description, hasFile: !!file_base64, fileLen: file_base64?.length, public: isPublic, access_group });
+        console.log('Creating app with payload:', { name, description, hasFile: !!file_base64, fileLen: file_base64?.length, fileExt, public: isPublic, access_group });
         const res = await apiFetch(`${apiBase}/apps`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders() },

@@ -433,6 +433,7 @@ struct AppRecord
     std::string description;
     bool public_access = true;
     std::string access_group; // if not public, gate by this group
+    std::string file_extension = ".xlsx"; // .xlsx or .xlsm
 };
 
 std::string app_key(const std::string &owner, const std::string &name)
@@ -462,7 +463,7 @@ public:
             return false;
         uint32_t version = 0;
         in.read(reinterpret_cast<char *>(&version), sizeof(version));
-        if (version != 1 && version != 2)
+        if (version != 1 && version != 2 && version != 3)
             return false;
         auto read_string = [&in](std::string &out)
         {
@@ -509,6 +510,12 @@ public:
             in.read(reinterpret_cast<char *>(&pub), sizeof(pub));
             a.public_access = pub != 0;
             read_string(a.access_group);
+            if (version >= 3)
+            {
+                read_string(a.file_extension);
+                if (a.file_extension.empty())
+                    a.file_extension = ".xlsx";
+            }
             apps_[app_key(a.owner, a.name)] = a;
         }
         return true;
@@ -595,7 +602,7 @@ private:
                 out.write(s.data(), len);
         };
         out.write("DB01", 4);
-        uint32_t version = 2;
+        uint32_t version = 3;
         out.write(reinterpret_cast<const char *>(&version), sizeof(version));
         uint32_t user_count = static_cast<uint32_t>(users_.size());
         out.write(reinterpret_cast<const char *>(&user_count), sizeof(user_count));
@@ -623,6 +630,7 @@ private:
             uint8_t pub = a.public_access ? 1 : 0;
             out.write(reinterpret_cast<const char *>(&pub), sizeof(pub));
             write_string(a.access_group);
+            write_string(a.file_extension.empty() ? ".xlsx" : a.file_extension);
         }
         out.close();
         std::error_code ec;
@@ -777,24 +785,26 @@ public:
             return;
         shutdown_ = true;
         log_info("Shutting down Excel pool");
-        for (auto &slot : slots_)
+        for (size_t i = 0; i < slots_.size(); ++i)
         {
             try
             {
-                if (slot.workbook)
-                    dispatch_call_noargs(slot.workbook, L"Close");
+                if (slots_[i].workbook)
+                    dispatch_call_noargs(slots_[i].workbook, L"Close");
             }
             catch (...)
             {
             }
             try
             {
-                if (slot.app)
-                    dispatch_call_noargs(slot.app, L"Quit");
+                if (slots_[i].app)
+                    dispatch_call_noargs(slots_[i].app, L"Quit");
             }
             catch (...)
             {
             }
+            // Clean up temporary directory
+            cleanup_temp_dir(i);
         }
         slots_.clear();
         if (com_initialized_)
@@ -825,18 +835,75 @@ public:
             }
             app = slots_[slot_index].app;
             old_wb = slots_[slot_index].workbook;
+            // Clean up any previous temp directory for this slot
+            cleanup_temp_dir(static_cast<size_t>(slot_index));
         }
         if (old_wb)
         {
             log_info("Closing prior workbook for session=" + session_mask + " slot=" + std::to_string(slot_index));
             dispatch_call_noargs(old_wb, L"Close");
         }
-        std::wstring wpath = resolved_path.wstring();
+
+        // Create temporary working directory and copy app files
+        fs::path source_dir = resolved_path.parent_path();
+        std::string temp_id = generate_temp_id();
+        fs::path temp_base = fs::temp_directory_path() / "esa_sessions";
+        fs::path temp_dir = temp_base / temp_id;
+        std::error_code ec;
+        
+        // Create temp directory
+        if (!fs::create_directories(temp_dir, ec) && !fs::exists(temp_dir, ec))
+        {
+            err = "failed to create temp directory";
+            log_error("Failed to create temp directory: " + temp_dir.u8string() + " error=" + ec.message());
+            std::lock_guard<std::mutex> lock(mu_);
+            release_slot_by_index_locked(static_cast<size_t>(slot_index));
+            return false;
+        }
+        log_info("Created temporary directory: " + temp_dir.u8string() + " for session=" + session_mask);
+
+        // Copy all files from source directory to temp directory
+        for (const auto &entry : fs::directory_iterator(source_dir, ec))
+        {
+            if (entry.is_regular_file())
+            {
+                fs::path dest_file = temp_dir / entry.path().filename();
+                std::error_code copy_ec;
+                fs::copy_file(entry.path(), dest_file, fs::copy_options::overwrite_existing, copy_ec);
+                if (copy_ec)
+                {
+                    log_warn("Failed to copy file: " + entry.path().u8string() + " error=" + copy_ec.message());
+                }
+                else
+                {
+                    log_info("Copied file to temp: " + entry.path().filename().u8string());
+                }
+            }
+        }
+        if (ec)
+        {
+            log_warn("Error iterating source directory: " + source_dir.u8string() + " error=" + ec.message());
+        }
+
+        // Build path to workbook in temp directory
+        fs::path temp_workbook_path = temp_dir / resolved_path.filename();
+        if (!fs::exists(temp_workbook_path, ec))
+        {
+            err = "workbook not copied to temp directory";
+            log_error("Workbook file not found in temp directory: " + temp_workbook_path.u8string());
+            fs::remove_all(temp_dir, ec);
+            std::lock_guard<std::mutex> lock(mu_);
+            release_slot_by_index_locked(static_cast<size_t>(slot_index));
+            return false;
+        }
+
+        std::wstring wpath = temp_workbook_path.wstring();
         CComPtr<IDispatch> workbooks = dispatch_get(app, L"Workbooks");
         if (!workbooks)
         {
             err = "failed to reach Workbooks";
             log_error("Failed to get Workbooks collection slot=" + std::to_string(slot_index) + " session=" + session_mask);
+            fs::remove_all(temp_dir, ec);
             std::lock_guard<std::mutex> lock(mu_);
             release_slot_by_index_locked(static_cast<size_t>(slot_index));
             restart_slot_locked(static_cast<size_t>(slot_index));
@@ -846,7 +913,8 @@ public:
         if (!workbook)
         {
             err = "failed to open workbook";
-            log_error("Excel failed to open path=" + path_str + " slot=" + std::to_string(slot_index));
+            log_error("Excel failed to open path=" + temp_workbook_path.u8string() + " slot=" + std::to_string(slot_index));
+            fs::remove_all(temp_dir, ec);
             std::lock_guard<std::mutex> lock(mu_);
             release_slot_by_index_locked(static_cast<size_t>(slot_index));
             restart_slot_locked(static_cast<size_t>(slot_index));
@@ -856,12 +924,13 @@ public:
         {
             std::lock_guard<std::mutex> lock(mu_);
             slots_[slot_index].workbook = workbook;
-            slots_[slot_index].workbook_path = resolved_path;
+            slots_[slot_index].workbook_path = temp_workbook_path;
+            slots_[slot_index].temp_dir = temp_dir;
             slots_[slot_index].session_id = session_id;
             slots_[slot_index].user = user;
             slots_[slot_index].in_use = true;
         }
-        log_info("Workbook loaded successfully slot=" + std::to_string(slot_index) + " session=" + session_mask + " path=" + path_str);
+        log_info("Workbook loaded successfully slot=" + std::to_string(slot_index) + " session=" + session_mask + " path=" + temp_workbook_path.u8string());
         return true;
     }
 
@@ -1473,6 +1542,8 @@ public:
             std::lock_guard<std::mutex> lock(mu_);
             slots_[idx].workbook.Release();
             slots_[idx].workbook_path.clear();
+            // Clean up temporary directory
+            cleanup_temp_dir(static_cast<size_t>(idx));
             slots_[idx].session_id.clear();
             slots_[idx].user.clear();
             slots_[idx].in_use = false;
@@ -1495,8 +1566,39 @@ private:
         std::string session_id;
         std::string user;
         fs::path workbook_path;
+        fs::path temp_dir;  // Temporary working directory for this session
         bool in_use = false;
     };
+
+    // Generate a unique temporary directory name
+    std::string generate_temp_id()
+    {
+        static const char charset[] = "abcdefghijklmnopqrstuvwxyz0123456789";
+        thread_local std::mt19937 rng{std::random_device{}()};
+        std::uniform_int_distribution<int> dist(0, static_cast<int>(sizeof(charset) - 2));
+        std::string t(16, ' ');
+        for (char &c : t)
+            c = charset[dist(rng)];
+        return t;
+    }
+
+    // Clean up temporary directory for a slot
+    void cleanup_temp_dir(size_t idx)
+    {
+        if (idx >= slots_.size() || slots_[idx].temp_dir.empty())
+            return;
+        std::error_code ec;
+        if (fs::exists(slots_[idx].temp_dir, ec))
+        {
+            log_info("Removing temporary directory: " + slots_[idx].temp_dir.u8string());
+            fs::remove_all(slots_[idx].temp_dir, ec);
+            if (ec)
+            {
+                log_warn("Failed to remove temp directory: " + slots_[idx].temp_dir.u8string() + " error=" + ec.message());
+            }
+        }
+        slots_[idx].temp_dir.clear();
+    }
 
     CComPtr<IDispatch> create_instance()
     {
@@ -1541,6 +1643,8 @@ private:
                 slots_[i].user = user;
                 slots_[i].workbook.Release();
                 slots_[i].workbook_path.clear();
+                // Clean up any leftover temp directory (should not happen, but be safe)
+                cleanup_temp_dir(i);
                 return static_cast<int>(i);
             }
         }
@@ -1556,6 +1660,8 @@ private:
             dispatch_call_noargs(slots_[idx].app, L"Quit");
         slots_[idx].app.Release();
         slots_[idx].workbook.Release();
+        // Clean up temporary directory
+        cleanup_temp_dir(idx);
         CComPtr<IDispatch> app = create_instance();
         if (!app)
         {
@@ -1623,6 +1729,8 @@ private:
             return;
         slots_[idx].workbook.Release();
         slots_[idx].workbook_path.clear();
+        // Clean up temporary directory
+        cleanup_temp_dir(idx);
         slots_[idx].session_id.clear();
         slots_[idx].user.clear();
         slots_[idx].in_use = false;
@@ -2502,7 +2610,8 @@ private:
         }
         int ver = version > 0 ? version : app.latest_version;
         log_info("Excel load request user=" + caller.name + " owner=" + owner + " app=" + app_name + " version=" + std::to_string(ver));
-        fs::path file_path = version_path(app.owner, app.name, ver) / (app.name + ".xlsx");
+        std::string ext = app.file_extension.empty() ? ".xlsx" : app.file_extension;
+        fs::path file_path = version_path(app.owner, app.name, ver) / (app.name + ext);
         if (!fs::exists(file_path))
         {
             resp.status = 404;
@@ -2691,7 +2800,8 @@ private:
             return resp;
         }
         int ver = version > 0 ? version : app.latest_version;
-        fs::path file_path = version_path(app.owner, app.name, ver) / (app.name + ".xlsx");
+        std::string ext = app.file_extension.empty() ? ".xlsx" : app.file_extension;
+        fs::path file_path = version_path(app.owner, app.name, ver) / (app.name + ext);
         if (!fs::exists(file_path))
         {
             resp.status = 404;
@@ -2778,7 +2888,8 @@ private:
             return resp;
         }
         int ver = version > 0 ? version : app.latest_version;
-        fs::path file_path = version_path(app.owner, app.name, ver) / (app.name + ".xlsx");
+        std::string ext = app.file_extension.empty() ? ".xlsx" : app.file_extension;
+        fs::path file_path = version_path(app.owner, app.name, ver) / (app.name + ext);
         if (!fs::exists(file_path))
         {
             resp.status = 404;
@@ -2856,7 +2967,8 @@ private:
             return resp;
         }
         int ver = version > 0 ? version : app.latest_version;
-        fs::path file_path = version_path(app.owner, app.name, ver) / (app.name + ".xlsx");
+        std::string ext = app.file_extension.empty() ? ".xlsx" : app.file_extension;
+        fs::path file_path = version_path(app.owner, app.name, ver) / (app.name + ext);
         if (!fs::exists(file_path))
         {
             resp.status = 404;
@@ -2914,7 +3026,11 @@ private:
         std::string file_b64 = extract_json_string(req.body, "file_base64");
         std::string access_group = extract_json_string(req.body, "access_group");
         std::string image_b64 = extract_json_string(req.body, "image_base64");
+        std::string file_ext = extract_json_string(req.body, "file_extension");
         bool is_public = extract_json_bool(req.body, "public", false);
+        // Validate and default file extension
+        if (file_ext.empty() || (file_ext != ".xlsx" && file_ext != ".xlsm" && file_ext != ".xls"))
+            file_ext = ".xlsx";
         if (app_name.empty() || file_b64.empty())
         {
             resp.status = 400;
@@ -2948,12 +3064,12 @@ private:
             return resp;
         }
         std::string content = base64_decode(file_b64);
-        std::ofstream file(ver_path / (app_name + ".xlsx"), std::ios::binary);
+        std::ofstream file(ver_path / (app_name + file_ext), std::ios::binary);
         file.write(content.data(), static_cast<std::streamsize>(content.size()));
         file.close();
         AppInfo info{app_name, 1, desc};
         write_metadata(ver_path, info);
-        AppRecord rec{caller.name, app_name, 1, desc, is_public, access_group};
+        AppRecord rec{caller.name, app_name, 1, desc, is_public, access_group, file_ext};
         db_.upsert_app(rec);
         if (!image_b64.empty())
         {
@@ -3029,10 +3145,11 @@ private:
             resp.body = "{\"error\":\"cannot create folder\"}";
             return resp;
         }
+        std::string ext = app.file_extension.empty() ? ".xlsx" : app.file_extension;
         if (!file_b64.empty())
         {
             std::string content = base64_decode(file_b64);
-            std::ofstream file(target_path / (app_name + ".xlsx"), std::ios::binary | std::ios::trunc);
+            std::ofstream file(target_path / (app_name + ext), std::ios::binary | std::ios::trunc);
             file.write(content.data(), static_cast<std::streamsize>(content.size()));
         }
         if (!desc.empty())
@@ -3123,7 +3240,8 @@ private:
             resp.body = "{\"error\":\"cannot create folder\"}";
             return resp;
         }
-        fs::path target_file = target_path / (app_name + ".xlsx");
+        std::string ext = app.file_extension.empty() ? ".xlsx" : app.file_extension;
+        fs::path target_file = target_path / (app_name + ext);
         bool workbook_ready = false;
         if (!file_b64.empty())
         {
@@ -3135,7 +3253,7 @@ private:
         }
         else
         {
-            fs::path prev_file = version_path(app.owner, app.name, prev_version) / (app_name + ".xlsx");
+            fs::path prev_file = version_path(app.owner, app.name, prev_version) / (app_name + ext);
             std::error_code ec;
             if (fs::exists(prev_file))
             {
